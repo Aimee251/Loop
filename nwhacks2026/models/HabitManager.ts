@@ -17,8 +17,8 @@ export class HabitManager {
   /**
    * Create a new habit
    */
-  createHabit(action: string, goalDays: number): Habit {
-    const habit = new Habit(action, goalDays);
+  createHabit(action: string, goalDays: number, daysPerWeek : number): Habit {
+    const habit = new Habit(action, goalDays, daysPerWeek);
     this.habits.set(habit.id, habit);
     this.saveHabits();
     return habit;
@@ -156,7 +156,6 @@ export class HabitManager {
     return {
       id: habit.id,
       action: habit.action,
-      currentStreak: habit.currentStreak,
       goalDays: habit.goalDays,
       progress: habit.getProgress(),
       isGoalReached: habit.isGoalReached(),
