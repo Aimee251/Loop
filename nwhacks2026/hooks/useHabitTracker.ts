@@ -1,6 +1,6 @@
 // hooks/useHabitTracker.js
 import { useState, useEffect } from 'react';
-import { sendShameText } from '../utils/smsService';
+import { sendPraiseText, sendShameText } from '../utils/smsService';
 
 export const useHabitTracker = () => {
     const [isHabitDone, setIsHabitDone] = useState(false);
@@ -10,6 +10,10 @@ export const useHabitTracker = () => {
     const triggerPenaltyManual = () => {
         sendShameText();
     };
+
+    const triggerPraiseManual = () => {
+        sendPraiseText();
+    }
 
     // The Automatic Midnight Checker
     useEffect(() => {
@@ -33,6 +37,7 @@ export const useHabitTracker = () => {
     return {
         isHabitDone,
         setIsHabitDone,
-        triggerPenaltyManual
+        triggerPenaltyManual,
+        triggerPraiseManual
     };
 };
