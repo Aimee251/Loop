@@ -1,10 +1,11 @@
-import { Stack } from "expo-router";
+import { Stack } from 'expo-router';
 
-export default function RootLayout() {
+export default function Layout() {
   return (
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="modal" options={{ presentation: "modal", title: "Mood" }} />
-    </Stack>
+    <Stack
+      screenOptions={{
+        headerShown: false // Hides the header for all screens
+      }}
+    />
   );
 }

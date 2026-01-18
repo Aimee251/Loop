@@ -1,4 +1,4 @@
-import { Habit, HabitData } from './Habit';
+import {Habit, HabitData } from './Habit';
 
 /**
  * SoloHabit - Individual habit tracking (no phone numbers)
