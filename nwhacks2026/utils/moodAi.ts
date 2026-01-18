@@ -34,7 +34,7 @@ type MoodTaskInput = {
   habitAction: string;
 };
 
-const API_BASE = "http://192.168.68.125:8787"; // change if needed
+const API_BASE = "http://128.189.218.190:8787"; // change if needed
 
 /**
  * Clamp recommended days to a reasonable range
