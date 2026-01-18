@@ -1,13 +1,16 @@
 /**
  * HabitManager handles all CRUD operations for habits.
- * This is a service class that manages habit storage and operations.
+ * This is a service class that manages both SoloHabit and GroupHabit storage and operations.
  */
 
 import { Habit, HabitData } from './Habit';
+import { SoloHabit } from './SoloHabit';
+import { GroupHabit } from './GroupHabit';
 
 export class HabitManager {
   private habits: Map<string, Habit> = new Map();
   private storageKey = 'habits_storage';
+  private readonly MAX_HABITS = 3;
 
   constructor() {
     // Initialize - in the future, this could load from AsyncStorage or a backend
@@ -15,13 +18,60 @@ export class HabitManager {
   }
 
   /**
-   * Create a new habit
+   * Check if maximum habit limit has been reached
    */
-  createHabit(action: string, goalDays: number, daysPerWeek : number): Habit {
-    const habit = new Habit(action, goalDays, daysPerWeek);
+  private isAtMaxHabits(): boolean {
+    const activeHabits = this.getActiveHabits();
+    return activeHabits.length >= this.MAX_HABITS;
+  }
+
+  /**
+   * Get the number of active habits
+   */
+  getActiveHabitCount(): number {
+    return this.getActiveHabits().length;
+  }
+
+  /**
+   * Get the maximum allowed habits
+   */
+  getMaxHabits(): number {
+    return this.MAX_HABITS;
+  }
+
+  /**
+   * Create a new solo habit (individual tracking)
+   */
+  createSoloHabit(action: string, goalDays: number): SoloHabit | null {
+    if (this.isAtMaxHabits()) {
+      console.warn(`Cannot create habit. Maximum of ${this.MAX_HABITS} habits allowed.`);
+      return null;
+    }
+    const habit = new SoloHabit(action, goalDays);
     this.habits.set(habit.id, habit);
     this.saveHabits();
     return habit;
+  }
+
+  /**
+   * Create a new group habit (with multiple phone numbers)
+   */
+  createGroupHabit(action: string, goalDays: number, phoneNumbers: string[] = []): GroupHabit | null {
+    if (this.isAtMaxHabits()) {
+      console.warn(`Cannot create habit. Maximum of ${this.MAX_HABITS} habits allowed.`);
+      return null;
+    }
+    const habit = new GroupHabit(action, goalDays, phoneNumbers);
+    this.habits.set(habit.id, habit);
+    this.saveHabits();
+    return habit;
+  }
+
+  /**
+   * Create a new habit (legacy method - creates SoloHabit)
+   */
+  createHabit(action: string, goalDays: number): SoloHabit | null {
+    return this.createSoloHabit(action, goalDays);
   }
 
   /**
