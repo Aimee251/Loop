@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, SafeAreaView, ScrollView, 
   TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, 
-  Platform, ActivityIndicator, Dimensions 
+  Platform, ActivityIndicator, Dimensions, Alert
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from "expo-router"; 
@@ -41,7 +41,8 @@ const HabitCard = ({
   aiInfo, 
   isExpanded, 
   onPress, 
-  onDelete 
+  onDelete,
+  onViewCalendar
 }) => {
   // 1. Define the animation driver (0 = collapsed, 1 = expanded)
   // We rely on the parent prop 'isExpanded' to trigger changes
@@ -119,6 +120,14 @@ const HabitCard = ({
 
         {/* EXPANDED CONTENT */}
         <Animated.View style={[styles.cardBody, contentStyle]}>
+          <TouchableOpacity 
+            style={styles.calendarBtn}
+            onPress={() => onViewCalendar(habit.id)}
+          >
+            <MaterialCommunityIcons name="calendar-outline" size={18} color="#FFF" />
+            <Text style={styles.calendarBtnText}>View Calendar</Text>
+          </TouchableOpacity>
+
           {aiInfo ? (
             <View>
               <Text style={styles.aiLabel}>ADJUSTED GOAL</Text>
@@ -157,6 +166,12 @@ export default function MainScreen() {
     if (currentMood) fetchAiForHabits(currentMood);
   }, [currentMood]);
 
+  useEffect(() => {
+    if (habits.length > 0) {
+      setExpandedCardId(habits[0].id);
+    }
+  }, [habits]);
+
   const refreshHabits = () => {
     const activeHabits = habitManager.getActiveHabits();
     setHabits([...activeHabits]);
@@ -177,6 +192,9 @@ export default function MainScreen() {
   };
 
   const handleCreateHabit = () => {
+    if (habits.length >= 3) {
+      return Alert.alert("Limit Reached", "You cannot have more than 3 habits.");
+    }
     if (!habitName.trim()) return Alert.alert("Required", "Enter a name");
     if (isGroupMode) {
        habitManager.createGroupHabit(habitName, DEFAULT_GOAL_DAYS, [phoneNumber]);
@@ -198,6 +216,13 @@ export default function MainScreen() {
 
   const toggleCard = (id) => {
     setExpandedCardId(prev => prev === id ? null : id);
+  };
+
+  const handleViewCalendar = (habitId) => {
+    router.push({
+      pathname: '/CalendarScreen',
+      params: { habitId }
+    });
   };
 
   return (
@@ -242,6 +267,7 @@ export default function MainScreen() {
                 isExpanded={expandedCardId === habit.id}
                 onPress={toggleCard}
                 onDelete={handleDelete}
+                onViewCalendar={handleViewCalendar}
               />
             ))
           )}
@@ -362,4 +388,6 @@ const styles = StyleSheet.create({
   bottomNav: { position: 'absolute', bottom: 30, left: 20, right: 20, height: 70, backgroundColor: COLORS.navBar, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderRadius: 35, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
   addButton: { backgroundColor: '#1C1C1E', width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', top: -10 },
   navItem: { padding: 10 },
+  calendarBtn: { flexDirection: 'row', backgroundColor: COLORS.primaryBtn, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 16 },
+  calendarBtnText: { color: '#FFF', fontWeight: '600', fontSize: 14 },
 });
