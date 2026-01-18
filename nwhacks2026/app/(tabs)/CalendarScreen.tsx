@@ -116,26 +116,12 @@ export default function CalendarScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         
-        {/* --- Header with Back and Completion Button --- */}
+        {/* --- Header with Back Button Only --- */}
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
             <Ionicons name="chevron-back" color={COLORS.charcoal} size={24} />
           </TouchableOpacity>
-          
-          {/* Completion Button */}
-          <TouchableOpacity 
-            onPress={handleMarkCompletion}
-            style={[
-              styles.completionButton,
-              isCompletedToday && styles.completionButtonActive
-            ]}
-          >
-            <Ionicons 
-              name={isCompletedToday ? "checkmark-done" : "checkmark"} 
-              color={isCompletedToday ? COLORS.white : COLORS.accentBlue} 
-              size={24} 
-            />
-          </TouchableOpacity>
+          <View style={{ flex: 1 }} />
         </View>
 
         {/* --- Summary Widget --- */}
@@ -172,10 +158,10 @@ export default function CalendarScreen() {
                 backgroundColor: COLORS.white,
                 calendarBackground: COLORS.white,
                 textSectionTitleColor: COLORS.charcoal,
-                selectedDayBackgroundColor: COLORS.accentBlue, // Highlighted day
+                selectedDayBackgroundColor: COLORS.accentBlue,
                 selectedDayTextColor: COLORS.white,
-                todayTextColor: COLORS.accentBlue, // Today's text color
-                dayTextColor: COLORS.darkCharcoal, // Normal day text color
+                todayTextColor: COLORS.accentBlue,
+                dayTextColor: COLORS.darkCharcoal,
                 textDisabledColor: COLORS.lightGrey,
                 arrowColor: COLORS.charcoal,
                 monthTextColor: COLORS.charcoal,
@@ -190,12 +176,24 @@ export default function CalendarScreen() {
           </View>
         </View>
 
-        {/* --- AI Chat Widget (Empty for now) --- */}
-        <View style={styles.aiChatWidget}>
-          <Text style={styles.widgetTitle}>AI Assistant</Text>
-          <View style={styles.emptyPlaceholder}>
-            <Text style={styles.placeholderText}>Coming soon...</Text>
-          </View>
+        {/* --- Completion Widget --- */}
+        <View style={styles.completionWidget}>
+          <TouchableOpacity 
+            onPress={handleMarkCompletion}
+            style={[
+              styles.completionButtonLarge,
+              isCompletedToday && styles.completionButtonLargeActive
+            ]}
+          >
+            <Ionicons 
+              name={isCompletedToday ? "checkmark-done" : "checkmark"} 
+              color={isCompletedToday ? COLORS.white : COLORS.accentBlue} 
+              size={48} 
+            />
+            <Text style={[styles.completionButtonText, isCompletedToday && styles.completionButtonTextActive]}>
+              {isCompletedToday ? 'Completed Today' : 'Mark as Complete'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
       </ScrollView>
@@ -229,27 +227,6 @@ const styles = StyleSheet.create({
   // Back Button
   backButton: {
     padding: 8,
-  },
-
-  // Completion Button
-  completionButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.accentBlue,
-    shadowColor: COLORS.mediumGrey,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  completionButtonActive: {
-    backgroundColor: COLORS.accentBlue,
-    borderColor: COLORS.accentBlue,
   },
 
   // Summary Widget Styles
@@ -321,32 +298,44 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // AI Chat Widget Styles
-  aiChatWidget: {
+  // Completion Widget Styles
+  completionWidget: {
     backgroundColor: COLORS.white,
     borderRadius: 15,
-    padding: 20,
-    marginBottom: 25,
+    padding: 5,
+    marginBottom: 1,
     shadowColor: COLORS.mediumGrey,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 4,
-    minHeight: 200,
     borderWidth: 1,
-    borderColor: COLORS.lightBlue, // Light blue border
-  },
-  emptyPlaceholder: {
+    borderColor: COLORS.lightBlue,
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 150,
-    backgroundColor: COLORS.lightest, // Use the lightest color for the placeholder background
-    borderRadius: 10,
+    minHeight: 40,
   },
-  placeholderText: {
-    fontSize: 14,
-    color: COLORS.mediumGrey,
-    fontStyle: 'italic',
+  completionButtonLarge: {
+    backgroundColor: COLORS.white,
+    borderWidth: 2,
+    borderColor: COLORS.accentBlue,
+    borderRadius: 15,
+    paddingVertical: 2,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 1,
+  },
+  completionButtonLargeActive: {
+    backgroundColor: COLORS.accentBlue,
+    borderColor: COLORS.accentBlue,
+  },
+  completionButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.accentBlue,
+  },
+  completionButtonTextActive: {
+    color: COLORS.white,
   },
 });
