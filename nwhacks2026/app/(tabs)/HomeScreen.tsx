@@ -35,8 +35,10 @@ const COLORS = {
 const MIN_GOAL_DAYS = 7;
 const MAX_GOAL_DAYS = 120;
 
-// NEW: Burnout guard
+// Burnout guard
 const MAX_ACTIVE_HABITS = 3;
+
+const todayStr = () => new Date().toISOString().split('T')[0];
 
 // --- ANIMATED CARD COMPONENT ---
 const HabitCard = ({
@@ -47,8 +49,32 @@ const HabitCard = ({
   onPress,
   onDelete,
   onOpenCalendar,
+  onToggleCompleteToday,
+}: {
+  habit: any;
+  index: number;
+  aiInfo: any;
+  isExpanded: boolean;
+  onPress: (id: string) => void;
+  onDelete: (id: string) => void;
+  onOpenCalendar: (id: string) => void;
+  onToggleCompleteToday: (id: string) => void;
 }) => {
   const animation = useSharedValue(0);
+
+  // NEW: measure-to-fit expanded height
+  const COLLAPSED_HEIGHT = 200;
+  const EXTRA_PADDING = 70;
+  const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState(0);
+  const [measuredBodyHeight, setMeasuredBodyHeight] = useState(0);
+
+  const targetExpandedHeight =
+    measuredBodyHeight === 0
+      ? Math.max(COLLAPSED_HEIGHT, 340) // fallback for first open before measure
+      : Math.max(
+          COLLAPSED_HEIGHT,
+          measuredHeaderHeight + measuredBodyHeight + EXTRA_PADDING
+        );
 
   useEffect(() => {
     animation.value = withSpring(isExpanded ? 1 : 0, {
@@ -58,11 +84,18 @@ const HabitCard = ({
   }, [isExpanded]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    const marginTop = index === 0
-      ? withTiming(isExpanded ? 20 : 0)
-      : interpolate(animation.value, [0, 1], [-130, 20]);
+    const marginTop =
+      index === 0
+        ? withTiming(isExpanded ? 20 : 0)
+        : interpolate(animation.value, [0, 1], [-130, 20]);
 
-    const height = interpolate(animation.value, [0, 1], [200, 300]);
+    // CHANGED: height now hugs content
+    const height = interpolate(
+      animation.value,
+      [0, 1],
+      [COLLAPSED_HEIGHT, targetExpandedHeight]
+    );
+
     const scale = interpolate(animation.value, [0, 1], [0.95, 1]);
 
     return {
@@ -75,14 +108,27 @@ const HabitCard = ({
 
   const contentStyle = useAnimatedStyle(() => {
     return {
-      opacity: interpolate(animation.value, [0, 0.5, 1], [0, 0, 1], Extrapolation.CLAMP),
-      transform: [
-        { translateY: interpolate(animation.value, [0, 1], [20, 0]) }
-      ]
+      opacity: interpolate(
+        animation.value,
+        [0, 0.5, 1],
+        [0, 0, 1],
+        Extrapolation.CLAMP
+      ),
+      transform: [{ translateY: interpolate(animation.value, [0, 1], [20, 0]) }],
     };
   });
 
   const cardColor = [COLORS.card1, COLORS.card2, COLORS.card3][index % 3];
+
+  const stats = habitManager.getHabitStats(habit.id);
+  const pct = stats ? Math.max(0, Math.min(1, Number(stats.progress || 0))) : 0;
+  const doneDays = stats?.totalCompletedDays ?? (Array.isArray(habit?.completedDays) ? habit.completedDays.length : 0);
+  const goalDays = stats?.goalDays ?? habit?.goalDays ?? 0;
+  const completedToday =
+    stats?.completedToday ??
+    (typeof habit?.isCompletedToday === 'function'
+      ? habit.isCompletedToday()
+      : (Array.isArray(habit?.completedDays) ? habit.completedDays.includes(todayStr()) : false));
 
   return (
     <Animated.View style={[styles.card, { backgroundColor: cardColor }, animatedStyle]}>
@@ -92,10 +138,20 @@ const HabitCard = ({
         style={styles.cardInner}
       >
         {/* HEADER (Always Visible) */}
-        <View style={styles.cardHeader}>
+        <View
+          style={styles.cardHeader}
+          onLayout={(e) => {
+            const h = Math.ceil(e.nativeEvent.layout.height);
+            if (h !== measuredHeaderHeight) setMeasuredHeaderHeight(h);
+          }}
+        >
           <View style={styles.headerLeft}>
             <MaterialCommunityIcons
-              name={habit.phoneNumbers && habit.phoneNumbers.length > 0 ? "account-group" : "water-outline"}
+              name={
+                habit.phoneNumbers && habit.phoneNumbers.length > 0
+                  ? "account-group"
+                  : "water-outline"
+              }
               size={28}
               color={COLORS.textPrimary}
             />
@@ -132,32 +188,81 @@ const HabitCard = ({
 
         {/* EXPANDED CONTENT */}
         <Animated.View style={[styles.cardBody, contentStyle]}>
-          {aiInfo ? (
-            <View>
-              <Text style={styles.aiLabel}>ADJUSTED GOAL</Text>
-              <Text style={styles.aiTask}>{aiInfo.modifiedTask}</Text>
-              <Text style={styles.aiNote}>{aiInfo.researchNote}</Text>
-            </View>
-          ) : (
-            <Text style={styles.loadingTextSmall}>Syncing with mood...</Text>
-          )}
+          {/* Measure wrapper: bubble height will match everything inside */}
+          <View
+            onLayout={(e) => {
+              const h = Math.ceil(e.nativeEvent.layout.height);
+              if (h !== measuredBodyHeight) setMeasuredBodyHeight(h);
+            }}
+          >
+            {aiInfo ? (
+              <View>
+                <Text style={styles.aiLabel}>ADJUSTED GOAL</Text>
+                <Text style={styles.aiTask}>{aiInfo.modifiedTask}</Text>
+                <Text style={styles.aiNote}>{aiInfo.researchNote}</Text>
+
+                {/* Progress + Complete Today */}
+                <View style={styles.progressBlock}>
+                  <View style={styles.progressTopRow}>
+                    <Text style={styles.progressText}>
+                      {doneDays}/{goalDays} days
+                    </Text>
+
+                    <TouchableOpacity
+                      onPress={() => onToggleCompleteToday(habit.id)}
+                      style={[
+                        styles.completePill,
+                        completedToday && styles.completePillActive,
+                      ]}
+                      accessibilityLabel="Toggle today completion"
+                    >
+                      <Ionicons
+                        name={completedToday ? "checkmark-done" : "checkmark"}
+                        size={18}
+                        color={completedToday ? "#FFFFFF" : COLORS.textPrimary}
+                      />
+                      <Text
+                        style={[
+                          styles.completePillText,
+                          completedToday && styles.completePillTextActive,
+                        ]}
+                      >
+                        {completedToday ? "Completed" : "Complete today"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.progressBarContainer}>
+                    <View style={[styles.progressBarFill, { width: `${Math.round(pct * 100)}%` }]} />
+                  </View>
+
+                  <Text style={styles.progressHint}>
+                    {goalDays > 0
+                      ? `${Math.round(pct * 100)}% of goal`
+                      : "Set a goal to track progress"}
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.loadingTextSmall}>Syncing with mood...</Text>
+            )}
+          </View>
         </Animated.View>
       </TouchableOpacity>
     </Animated.View>
   );
 };
 
-
 // --- MAIN SCREEN ---
 export default function MainScreen() {
   const { mood } = useLocalSearchParams();
   const currentMood = mood || 'calm';
 
-  const [habits, setHabits] = useState([]);
+  const [habits, setHabits] = useState<any[]>([]);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiData, setAiData] = useState({});
-  const [expandedCardId, setExpandedCardId] = useState(null);
+  const [aiData, setAiData] = useState<Record<string, any>>({});
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
   // Form State
   const [habitName, setHabitName] = useState('');
@@ -180,16 +285,20 @@ export default function MainScreen() {
     setHabits([...activeHabits]);
   };
 
-  const fetchAiForHabits = async (moodTag) => {
+  const fetchAiForHabits = async (moodTag: any) => {
     setAiLoading(true);
     const currentHabits = habitManager.getActiveHabits();
     const newAiData: any = {};
-    await Promise.all(currentHabits.map(async (h) => {
-      try {
-        const res = await getMoodAdjustedTask({ moodTag, habitAction: h.action });
-        newAiData[h.id] = res;
-      } catch (e) { console.error(e); }
-    }));
+    await Promise.all(
+      currentHabits.map(async (h: any) => {
+        try {
+          const res = await getMoodAdjustedTask({ moodTag, habitAction: h.action });
+          newAiData[h.id] = res;
+        } catch (e) {
+          console.error(e);
+        }
+      })
+    );
     setAiData(newAiData);
     setAiLoading(false);
   };
@@ -223,7 +332,7 @@ export default function MainScreen() {
   };
 
   const handleCreateHabit = () => {
-    // NEW: Burnout guard (max 3 active habits)
+    // Burnout guard (max 3 active habits)
     const activeCount = habitManager.getActiveHabits().length;
     if (activeCount >= MAX_ACTIVE_HABITS) {
       Alert.alert(
@@ -259,16 +368,17 @@ export default function MainScreen() {
     setAddModalVisible(false);
 
     refreshHabits();
+    // Keep AI sync when adding new habit (this is useful)
     if (currentMood) fetchAiForHabits(currentMood);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = (id: string) => {
     habitManager.deleteHabit(id);
     refreshHabits();
   };
 
-  const toggleCard = (id) => {
-    setExpandedCardId(prev => prev === id ? null : id);
+  const toggleCard = (id: string) => {
+    setExpandedCardId(prev => (prev === id ? null : id));
   };
 
   const closeAddModal = () => {
@@ -288,6 +398,21 @@ export default function MainScreen() {
     });
   };
 
+  // IMPORTANT: completion should NOT re-fetch AI (prevents "syncing" again)
+  const toggleCompleteToday = (habitId: string) => {
+    const h: any = habitManager.getHabit(habitId);
+    if (!h) return;
+
+    const completed = typeof h.isCompletedToday === 'function'
+      ? h.isCompletedToday()
+      : (Array.isArray(h.completedDays) ? h.completedDays.includes(todayStr()) : false);
+
+    if (completed) habitManager.unmarkHabitAsCompleted(habitId);
+    else habitManager.markHabitAsCompleted(habitId);
+
+    refreshHabits(); // ✅ update UI only
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -299,8 +424,9 @@ export default function MainScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greetingSub}>Loop</Text>
-            <Text style={styles.dateText}>Your Habit Progress</Text>
+            <Text style={styles.dateText}>Your Habit Porgress</Text>
           </View>
+
           <TouchableOpacity
             style={styles.moodBadge}
             activeOpacity={0.8}
@@ -322,7 +448,7 @@ export default function MainScreen() {
           </View>
         )}
 
-        {/* Cards */}
+        {/* --- STACKED CARD LIST --- */}
         <View style={styles.cardStackContainer}>
           {habits.length === 0 ? (
             <View style={styles.emptyState}>
@@ -339,6 +465,7 @@ export default function MainScreen() {
                 onPress={toggleCard}
                 onDelete={handleDelete}
                 onOpenCalendar={openCalendarForHabit}
+                onToggleCompleteToday={toggleCompleteToday}
               />
             ))
           )}
@@ -369,7 +496,7 @@ export default function MainScreen() {
               }}
             />
 
-            {/* Duration */}
+            {/* Duration (required) */}
             <View style={styles.durationRow}>
               <TextInput
                 style={[styles.input, styles.durationInput]}
@@ -439,14 +566,11 @@ export default function MainScreen() {
         <TouchableOpacity style={styles.addButton} onPress={() => setAddModalVisible(true)}>
           <Ionicons name="add" size={32} color="#FFF" />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push('/CalendarScreen')}
-          accessibilityLabel="Open calendar"
-        >
+        <TouchableOpacity style={styles.navItem}>
           <Ionicons name="stats-chart" size={24} color="#C5C5C7" />
         </TouchableOpacity>
       </View>
+
     </SafeAreaView>
   );
 }
@@ -464,6 +588,7 @@ const styles = StyleSheet.create({
   loadingRow: { flexDirection: 'row', gap: 10, marginBottom: 20, justifyContent: 'center' },
   loadingText: { color: COLORS.textSecondary, fontSize: 12 },
 
+  // --- STACK STYLES ---
   cardStackContainer: { paddingTop: 10 },
   card: {
     borderRadius: 20,
@@ -491,14 +616,79 @@ const styles = StyleSheet.create({
   aiNote: { fontSize: 14, color: COLORS.textPrimary, opacity: 0.6, lineHeight: 20, fontStyle: 'italic' },
   loadingTextSmall: { fontSize: 14, color: COLORS.textSecondary, fontStyle: 'italic' },
 
+  // Progress block inside expanded bubble
+  progressBlock: {
+    marginTop: 16,
+    backgroundColor: 'rgba(255,255,255,0.65)',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  progressTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 10,
+  },
+  progressText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+  },
+  progressBarContainer: {
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.10)',
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  progressHint: {
+    marginTop: 8,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+
+  completePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+  },
+  completePillActive: {
+    backgroundColor: '#1C1C1E',
+    borderColor: '#1C1C1E',
+  },
+  completePillText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: COLORS.textPrimary,
+  },
+  completePillTextActive: {
+    color: '#FFFFFF',
+  },
+
   emptyState: { alignItems: 'center', padding: 40 },
 
+  // Modal & Nav
   modalOverlay: { flex: 1, backgroundColor: COLORS.modalOverlay, justifyContent: 'flex-end' },
   addModalContent: { backgroundColor: '#F2F2F7', padding: 24, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
   modalTitle: { fontSize: 20, fontWeight: '700' },
   input: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginBottom: 15, fontSize: 16 },
 
+  // Duration input + generator
   durationRow: { flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 10 },
   durationInput: { flex: 1, marginBottom: 0 },
   optimalBtn: {
