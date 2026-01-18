@@ -431,7 +431,7 @@ export default function MainScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greetingSub}>Loop</Text>
-            <Text style={styles.dateText}>Your Habit Porgress</Text>
+            <Text style={styles.dateText}>Your Habit Progress</Text>
           </View>
 
           <TouchableOpacity
