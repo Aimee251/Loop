@@ -1,15 +1,16 @@
 // app/(tabs)/we-screen.tsx
 import React, { useMemo, useState } from "react";
+import { router } from "expo-router";
 import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   FlatList,
   Image,
   Alert,
   ListRenderItemInfo,
   Platform,
+  TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -65,53 +66,25 @@ export default function WeScreen() {
     () => [
       {
         id: "h1",
-        title: "Morning Walk",
-        withLabel: "With Mia & Lily",
+        title: "Wake up at 9am",
+        withLabel: "Group Habit",
         members: [
           {
             id: "m1",
-            name: "Mia",
-            status: "done",
-            timeLabel: "10m ago",
-            avatar:
-              "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=60",
-          },
-          {
-            id: "m2",
             name: "You",
             status: "pending",
             timeLabel: "",
             avatar:
-              "https://images.unsplash.com/photo-1547425260-76bcadfb4f2c?auto=format&fit=crop&w=200&q=60",
+              "",
           },
           {
-            id: "m3",
-            name: "Lily",
+            id: "m2",
+            name: "6729718961",
             status: "later",
             timeLabel: "Later",
             avatar:
-              "https://images.unsplash.com/photo-1548142813-c348350df52b?auto=format&fit=crop&w=200&q=60",
+              "",
           },
-        ],
-      },
-      {
-        id: "h2",
-        title: "Read Together",
-        withLabel: "With Tom",
-        compact: true,
-        members: [
-          { id: "m4", name: "You", status: "pending" },
-          { id: "m5", name: "Tom", status: "later" },
-        ],
-      },
-      {
-        id: "h3",
-        title: "Drink Water",
-        withLabel: "With Nora",
-        compact: true,
-        members: [
-          { id: "m6", name: "You", status: "pending" },
-          { id: "m7", name: "Nora", status: "done" },
         ],
       },
     ],
@@ -154,10 +127,7 @@ export default function WeScreen() {
   };
 
   const onReact = (habit: SharedHabit, type: "support" | "spark") => {
-    Alert.alert(
-      "Sent",
-      type === "support" ? "Support sent." : "Nice boost sent."
-    );
+    Alert.alert("Sent", type === "support" ? "Support sent." : "Nice boost sent.");
   };
 
   const renderHabit = ({ item, index }: ListRenderItemInfo<SharedHabit>) => {
@@ -187,9 +157,8 @@ export default function WeScreen() {
     );
   };
 
-  // Nav height = base 78 + safe area bottom
-  const NAV_BASE_HEIGHT = 78;
-  const navHeight = NAV_BASE_HEIGHT + insets.bottom;
+  // ✅ Match HomeScreen layout: floating pill nav with safe-area-aware bottom spacing
+  const bottomOffset = 30 + insets.bottom;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -202,14 +171,12 @@ export default function WeScreen() {
           extraData={checkedInIds}
           showsVerticalScrollIndicator={false}
           bounces
-          contentInsetAdjustmentBehavior={
-            Platform.OS === "ios" ? "automatic" : undefined
-          }
+          contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : undefined}
           contentContainerStyle={{
             paddingHorizontal: 24,
             paddingTop: 10,
-            // ✅ Enough to scroll above nav with NO huge empty space
-            paddingBottom: navHeight + 40,
+            // ✅ leave room so list doesn't hide behind floating nav
+            paddingBottom: bottomOffset + 90,
           }}
           ListHeaderComponent={
             <View>
@@ -227,28 +194,22 @@ export default function WeScreen() {
           }
         />
 
-        {/* ✅ Bottom Nav: flush to bottom, no gap */}
-        <View style={[styles.bottomNav, { height: navHeight, paddingBottom: insets.bottom }]}>
-          <Pressable
-            style={styles.navItem}
-            onPress={() => Alert.alert("Nav", "Home")}
-          >
-            <Ionicons name="home" size={28} color={COLORS.textPrimary} />
-          </Pressable>
+        {/* ✅ Bottom Nav (HomeScreen style) */}
+        <View style={[styles.bottomNav, { bottom: bottomOffset }]}>
+          <TouchableOpacity style={styles.navItem} onPress={() => router.replace("/")}>
+            <Ionicons name="wallet" size={28} color={COLORS.textPrimary} />
+          </TouchableOpacity>
 
-          <Pressable
+          <TouchableOpacity
             style={styles.addButton}
-            onPress={() => Alert.alert("Nav", "We")}
+            onPress={() => Alert.alert("Add", "Open add habit from Home for now.")}
           >
-            <Ionicons name="people" size={28} color={COLORS.textPrimary} />
-          </Pressable>
+            <Ionicons name="add" size={32} color="#FFF" />
+          </TouchableOpacity>
 
-          <Pressable
-            style={styles.navItem}
-            onPress={() => Alert.alert("Nav", "AI")}
-          >
-            <Ionicons name="sparkles" size={26} color={COLORS.textPrimary} />
-          </Pressable>
+          <TouchableOpacity style={styles.navItem} onPress={() => router.replace("/we-screen")}>
+            <Ionicons name="stats-chart" size={24} color="#C5C5C7" />
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
@@ -274,9 +235,9 @@ function HabitCard({
     <View style={[styles.card, { backgroundColor: bg }]}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>{habit.title}</Text>
-        <Pressable hitSlop={10} onPress={() => Alert.alert("Menu", "Edit / Mute / Leave")}>
+        <TouchableOpacity onPress={() => Alert.alert("Menu", "Edit / Mute / Leave")} hitSlop={10}>
           <Text style={styles.actionText}>•••</Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.withRow}>
@@ -311,20 +272,20 @@ function HabitCard({
       </View>
 
       {!checkedIn ? (
-        <Pressable style={styles.primaryBtn} onPress={onCheckIn}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={onCheckIn}>
           <Text style={styles.primaryBtnText}>Check in</Text>
-        </Pressable>
+        </TouchableOpacity>
       ) : (
         <View style={styles.reactionRow}>
-          <Pressable style={styles.reactionBtn} onPress={() => onReact("support")}>
+          <TouchableOpacity style={styles.reactionBtn} onPress={() => onReact("support")}>
             <Ionicons name="heart" size={18} color={COLORS.textPrimary} />
             <Text style={styles.reactionText}>Support</Text>
-          </Pressable>
+          </TouchableOpacity>
 
-          <Pressable style={styles.reactionBtn} onPress={() => onReact("spark")}>
+          <TouchableOpacity style={styles.reactionBtn} onPress={() => onReact("spark")}>
             <Ionicons name="flash" size={18} color={COLORS.textPrimary} />
             <Text style={styles.reactionText}>Boost</Text>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -351,9 +312,9 @@ function CompactHabitCard({
     <View style={[styles.card, { backgroundColor: bg }]}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>{habit.title}</Text>
-        <Pressable hitSlop={10} onPress={() => Alert.alert("Menu", "Edit / Mute / Leave")}>
+        <TouchableOpacity onPress={() => Alert.alert("Menu", "Edit / Mute / Leave")} hitSlop={10}>
           <Text style={styles.actionText}>•••</Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.withRow}>
@@ -370,20 +331,20 @@ function CompactHabitCard({
         </Text>
 
         {!checkedIn ? (
-          <Pressable style={styles.compactBtn} onPress={onCheckIn}>
+          <TouchableOpacity style={styles.compactBtn} onPress={onCheckIn}>
             <Text style={styles.compactBtnText}>Check in</Text>
-          </Pressable>
+          </TouchableOpacity>
         ) : (
           <View style={styles.reactionRow}>
-            <Pressable style={styles.reactionBtn} onPress={() => onReact("support")}>
+            <TouchableOpacity style={styles.reactionBtn} onPress={() => onReact("support")}>
               <Ionicons name="heart" size={18} color={COLORS.textPrimary} />
               <Text style={styles.reactionText}>Support</Text>
-            </Pressable>
+            </TouchableOpacity>
 
-            <Pressable style={styles.reactionBtn} onPress={() => onReact("spark")}>
+            <TouchableOpacity style={styles.reactionBtn} onPress={() => onReact("spark")}>
               <Ionicons name="flash" size={18} color={COLORS.textPrimary} />
               <Text style={styles.reactionText}>Boost</Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -488,28 +449,30 @@ const styles = StyleSheet.create({
   },
   compactBtnText: { color: "#FFF", fontWeight: "700" },
 
+  // ✅ HomeScreen-style floating nav
   bottomNav: {
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+    left: 20,
+    right: 20,
+    height: 70,
     backgroundColor: COLORS.navBar,
     flexDirection: "row",
     justifyContent: "space-around",
-    paddingTop: 12,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    alignItems: "center",
+    borderRadius: 35,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
     elevation: 10,
   },
   addButton: {
-    backgroundColor: "#D1D5DB",
-    width: 55,
-    height: 55,
-    borderRadius: 18,
+    backgroundColor: "#1C1C1E",
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: -25,
-    elevation: 5,
+    top: -10,
   },
   navItem: { padding: 10 },
 });
