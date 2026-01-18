@@ -127,34 +127,43 @@ export default function MainScreen() {
             const aiInfo = aiData[habit.id];
 
             return (
-                <View key={habit.id} style={[styles.card, { backgroundColor: cardColor }]}>
-                <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitle}>{habit.action}</Text>
-                    <TouchableOpacity onPress={() => handleDelete(habit.id)}>
-                        <Text style={styles.actionText}>Delete</Text>
-                    </TouchableOpacity>
-                </View>
-                
-                <View style={styles.cardBody}>
-                    <View style={styles.circleLogo}>
-                        <MaterialCommunityIcons 
-                        // Determine icon based on if phoneNumbers exist (GroupHabit)
-                        name={habit.phoneNumbers && habit.phoneNumbers.length > 0 ? "account-group" : "water-outline"} 
-                        size={32} color={COLORS.textPrimary} 
-                        />
+                <TouchableOpacity 
+                  key={habit.id} 
+                  onPress={() => router.push({
+                    pathname: '/calendar',
+                    params: { habitId: habit.id }
+                  })}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.card, { backgroundColor: cardColor }]}>
+                    <View style={styles.cardHeader}>
+                        <Text style={styles.cardTitle}>{habit.action}</Text>
+                        <TouchableOpacity onPress={() => handleDelete(habit.id)}>
+                            <Text style={styles.actionText}>Delete</Text>
+                        </TouchableOpacity>
                     </View>
+                    
+                    <View style={styles.cardBody}>
+                        <View style={styles.circleLogo}>
+                            <MaterialCommunityIcons 
+                            // Determine icon based on if phoneNumbers exist (GroupHabit)
+                            name={habit.phoneNumbers && habit.phoneNumbers.length > 0 ? "account-group" : "water-outline"} 
+                            size={32} color={COLORS.textPrimary} 
+                            />
+                        </View>
 
-                    {aiInfo ? (
-                    <View style={styles.aiContainer}>
-                        <Text style={styles.aiLabel}>Adjusted Goal:</Text>
-                        <Text style={styles.aiTask}>{aiInfo.modifiedTask}</Text>
-                        <Text style={styles.aiNote}>{aiInfo.researchNote}</Text>
+                        {aiInfo ? (
+                        <View style={styles.aiContainer}>
+                            <Text style={styles.aiLabel}>Adjusted Goal:</Text>
+                            <Text style={styles.aiTask}>{aiInfo.modifiedTask}</Text>
+                            <Text style={styles.aiNote}>{aiInfo.researchNote}</Text>
+                        </View>
+                        ) : (
+                            <Text style={styles.loadingTextSmall}>Loading adjustment...</Text>
+                        )}
                     </View>
-                    ) : (
-                        <Text style={styles.loadingTextSmall}>Loading adjustment...</Text>
-                    )}
-                </View>
-                </View>
+                  </View>
+                </TouchableOpacity>
             );
             })
         )}
