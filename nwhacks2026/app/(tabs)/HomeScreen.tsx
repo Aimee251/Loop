@@ -121,14 +121,21 @@ const HabitCard = ({
   const cardColor = [COLORS.card1, COLORS.card2, COLORS.card3][index % 3];
 
   const stats = habitManager.getHabitStats(habit.id);
-  const pct = stats ? Math.max(0, Math.min(1, Number(stats.progress || 0))) : 0;
-  const doneDays = stats?.totalCompletedDays ?? (Array.isArray(habit?.completedDays) ? habit.completedDays.length : 0);
-  const goalDays = stats?.goalDays ?? habit?.goalDays ?? 0;
+  const doneDays = Array.isArray(habit.completedDays)
+    ? habit.completedDays.length
+    : 0;
+
+  const goalDays = habit.goalDays || 0;
+
+  const pct =
+    goalDays > 0
+      ? Math.min(1, doneDays / goalDays)
+      : 0;
+
   const completedToday =
-    stats?.completedToday ??
-    (typeof habit?.isCompletedToday === 'function'
+    typeof habit.isCompletedToday === 'function'
       ? habit.isCompletedToday()
-      : (Array.isArray(habit?.completedDays) ? habit.completedDays.includes(todayStr()) : false));
+      : habit.completedDays?.includes(todayStr());
 
   return (
     <Animated.View style={[styles.card, { backgroundColor: cardColor }, animatedStyle]}>
@@ -400,18 +407,18 @@ export default function MainScreen() {
 
   // IMPORTANT: completion should NOT re-fetch AI (prevents "syncing" again)
   const toggleCompleteToday = (habitId: string) => {
-    const h: any = habitManager.getHabit(habitId);
+    const h = habitManager.getHabit(habitId);
     if (!h) return;
 
-    const completed = typeof h.isCompletedToday === 'function'
-      ? h.isCompletedToday()
-      : (Array.isArray(h.completedDays) ? h.completedDays.includes(todayStr()) : false);
+    if (h.isCompletedToday()) {
+      habitManager.unmarkHabitAsCompleted(habitId);
+    } else {
+      habitManager.markHabitAsCompleted(habitId);
+    }
 
-    if (completed) habitManager.unmarkHabitAsCompleted(habitId);
-    else habitManager.markHabitAsCompleted(habitId);
-
-    refreshHabits(); // ✅ update UI only
+    refreshHabits(); // ✅ this is enough
   };
+
 
   return (
     <SafeAreaView style={styles.container}>
