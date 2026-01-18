@@ -64,8 +64,12 @@ function Chip({
 export default function HomeMock() {
   const userName = "Aimee";
 
-  const activeHabits = useMemo(() => habitManager.getActiveHabits(), []);
-  const todaysHabit = activeHabits[0];
+const MOOD_TAGS: MoodOption[] = [
+  { key: 'energetic', label: 'Energetic', icon: 'flash', color: COLORS.card1 },
+  { key: 'tired', label: 'Tired', icon: 'bed', color: COLORS.card2 },
+  { key: 'anxious', label: 'Anxious', icon: 'pulse', color: COLORS.card3 },
+  { key: 'calm', label: 'Calm', icon: 'leaf', color: '#E0F7FA' },
+];
 
   const [selectedMood, setSelectedMood] = useState<MoodKey | null>(null);
   const [loading, setLoading] = useState(false);
@@ -284,3 +288,20 @@ export default function HomeMock() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background, justifyContent: 'center' },
+  content: { padding: 30 },
+  greeting: { fontSize: 28, fontWeight: '300', color: COLORS.textPrimary },
+  name: { fontSize: 34, fontWeight: '600', color: COLORS.textPrimary, marginBottom: 40 },
+  spacer: { height: 20 },
+  title: { fontSize: 24, fontWeight: '600', color: COLORS.textPrimary, marginBottom: 10 },
+  subtitle: { fontSize: 16, color: COLORS.textSecondary, marginBottom: 30 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 15, justifyContent: 'space-between' },
+  card: { 
+    width: '47%', aspectRatio: 1.1, borderRadius: 24, 
+    alignItems: 'center', justifyContent: 'center', gap: 10,
+    shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 3
+  },
+  label: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary },
+});
