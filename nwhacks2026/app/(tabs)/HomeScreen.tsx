@@ -270,9 +270,17 @@ export default function MainScreen() {
             <Text style={styles.greetingSub}>Loop</Text>
             <Text style={styles.dateText}>Your Habit Porgress</Text>
           </View>
-          <View style={styles.moodBadge}>
-             <Text style={styles.moodText}>{typeof currentMood === 'string' ? currentMood.charAt(0).toUpperCase() + currentMood.slice(1) : ''}</Text>
-          </View>
+            <TouchableOpacity
+              style={styles.moodBadge}
+              activeOpacity={0.8}
+              onPress={() => router.push("/MoodScreen")}
+            >
+              <Text style={styles.moodText}>
+                {typeof currentMood === 'string'
+                  ? currentMood.charAt(0).toUpperCase() + currentMood.slice(1)
+                  : ''}
+              </Text>
+            </TouchableOpacity>
         </View>
 
         {/* AI Loading */}

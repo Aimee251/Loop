@@ -30,7 +30,7 @@ export default function MoodScreen() {
       await AsyncStorage.setItem("mood_date", today);
 
       // Navigate to the main page
-      router.replace({ pathname: "/main", params: { mood: selectedMood } }); 
+      router.replace({ pathname: "/", params: { mood: selectedMood } }); 
     } catch (e) {
       console.error("Failed to save mood", e);
     }
