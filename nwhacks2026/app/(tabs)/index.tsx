@@ -34,7 +34,6 @@ const MOOD_TAGS: MoodOption[] = [
 export default function MoodScreen() {
   const [loading, setLoading] = React.useState(true);
 
-  // Optional: Check if user already logged mood today to skip this screen
   useEffect(() => {
     checkPreviousMood();
   }, []);
@@ -45,7 +44,6 @@ export default function MoodScreen() {
       const savedDate = await AsyncStorage.getItem("mood_date");
       const savedMood = await AsyncStorage.getItem("user_mood");
 
-      // If they already checked in today, go straight to HomeScreen
       if (savedDate === today && savedMood) {
         router.replace({ pathname: "/HomeScreen", params: { mood: savedMood } });
       } else {
@@ -62,8 +60,7 @@ export default function MoodScreen() {
       await AsyncStorage.setItem("user_mood", selectedMood);
       await AsyncStorage.setItem("mood_date", today);
 
-      // Navigate to the dashboard (app/HomeScreen.tsx)
-      router.replace({ pathname: "/HomeScreen", params: { mood: selectedMood } }); 
+      router.replace({ pathname: "/HomeScreen", params: { mood: selectedMood } });
     } catch (e) {
       console.error("Failed to save mood", e);
     }
@@ -80,23 +77,26 @@ export default function MoodScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.greeting}>Good Morning,</Text>
+        <Text style={styles.greeting}>Good Afternoon,</Text>
         <Text style={styles.name}>Aimee</Text>
-        
+
         <View style={styles.spacer} />
-        
+
         <Text style={styles.title}>How are you feeling?</Text>
         <Text style={styles.subtitle}>We'll adjust your habits to match your energy.</Text>
 
         <View style={styles.grid}>
           {MOOD_TAGS.map((m) => (
-            <TouchableOpacity 
-              key={m.key} 
+            <TouchableOpacity
+              key={m.key}
               style={[styles.card, { backgroundColor: m.color }]}
               onPress={() => handleMoodSelect(m.key)}
+              activeOpacity={0.85}
             >
-              <Ionicons name={m.icon} size={40} color={COLORS.textPrimary} />
-              <Text style={styles.label}>{m.label}</Text>
+              <View style={styles.cardContent}>
+                <Ionicons name={m.icon} size={40} color={COLORS.textPrimary} />
+                <Text style={styles.label}>{m.label}</Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>
@@ -106,18 +106,69 @@ export default function MoodScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background, justifyContent: 'center' },
-  content: { padding: 30 },
-  greeting: { fontSize: 28, fontWeight: '300', color: COLORS.textPrimary },
-  name: { fontSize: 34, fontWeight: '600', color: COLORS.textPrimary, marginBottom: 40 },
-  spacer: { height: 20 },
-  title: { fontSize: 24, fontWeight: '600', color: COLORS.textPrimary, marginBottom: 10 },
-  subtitle: { fontSize: 16, color: COLORS.textSecondary, marginBottom: 30 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 15, justifyContent: 'space-between' },
-  card: { 
-    width: '47%', aspectRatio: 1.1, borderRadius: 24, 
-    alignItems: 'center', justifyContent: 'center', gap: 10,
-    shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 3
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
   },
-  label: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary },
+  content: {
+    padding: 30,
+  },
+  greeting: {
+    fontSize: 28,
+    fontWeight: '300',
+    color: COLORS.textPrimary,
+  },
+  name: {
+    fontSize: 34,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 40,
+  },
+  spacer: {
+    height: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginBottom: 30,
+  },
+
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+
+  card: {
+    width: '47%',
+    aspectRatio: 1,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 30,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+
+  cardContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginTop: 10,
+    textAlign: 'center',
+  },
 });
