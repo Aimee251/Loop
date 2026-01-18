@@ -6,24 +6,30 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ScrollView,
-  Dimensions,
 } from 'react-native';
-import { ChevronLeft, Plus } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import { Calendar, DateData } from 'react-native-calendars';
+import { useLocalSearchParams, router } from 'expo-router';
 
 // Import your backend logic
-import { habitManager } from '../../models/HabitManager'; // Adjust path as needed
+import { habitManager } from '../../models/HabitManager';
 import { Habit } from '../../models/Habit';
 
-interface HabitDetailScreenProps {
-  habitId: string; // Passed from navigation
-  onBack: () => void;
-}
+// Define the new color palette from the image
+const COLORS = {
+  white: '#FFFFFF',
+  lightest: '#E8F0F0', // Very Light Grey/Blue
+  lightBlue: '#D0E2F0', // Light Blue
+  accentBlue: '#C2DAF8', // Bright Accent Blue
+  mediumBlue: '#B0C8E0', // Medium Blue
+  lightGrey: '#CECFC9', // Light Grey
+  mediumGrey: '#95969B', // Medium Grey
+  charcoal: '#484848', // Dark Charcoal
+  darkCharcoal: '#2D4150', // Slightly darker for calendar days
+};
 
-export const HabitDetailScreen: React.FC<HabitDetailScreenProps> = ({
-  habitId,
-  onBack,
-}) => {
+export default function CalendarScreen() {
+  const { habitId } = useLocalSearchParams();
   const [habit, setHabit] = useState<Habit | undefined>(undefined);
   const [markedDates, setMarkedDates] = useState<any>({});
   
@@ -33,7 +39,7 @@ export const HabitDetailScreen: React.FC<HabitDetailScreenProps> = ({
   }, [habitId]);
 
   const loadHabitData = () => {
-    const data = habitManager.getHabit(habitId);
+    const data = habitManager.getHabit(habitId as string);
     if (data) {
       setHabit(data);
       updateCalendarMarks(data);
@@ -48,17 +54,17 @@ export const HabitDetailScreen: React.FC<HabitDetailScreenProps> = ({
     currentHabit.completedDays.forEach((date) => {
       marks[date] = {
         selected: true,
-        selectedColor: '#E0E0E0', // Light grey for past completions
-        selectedTextColor: 'black',
+        selectedColor: COLORS.lightGrey, // Use light grey for past completions
+        selectedTextColor: COLORS.charcoal,
       };
     });
 
-    // Mark today (highlighted red like in your image)
+    // Mark today (highlighted with accent blue)
     const today = new Date().toISOString().split('T')[0];
     marks[today] = {
       selected: true,
-      selectedColor: '#FF4B4B', // The red circle from your image
-      selectedTextColor: 'white',
+      selectedColor: COLORS.accentBlue, // Use the bright accent blue for today
+      selectedTextColor: COLORS.white,
     };
 
     setMarkedDates(marks);
@@ -69,191 +75,216 @@ export const HabitDetailScreen: React.FC<HabitDetailScreenProps> = ({
     if (!habit) return;
 
     // Logic: Toggle completion for the selected date
-    // Note: Your backend currently supports marking 'today', 
-    // but for a full calendar we might need to update the backend 
-    // to allow toggling specific past dates. 
-    // For now, we simulate a refresh.
-    
     console.log('Selected day', day.dateString);
     // Refresh UI
     loadHabitData();
   };
 
-  if (!habit) return <View style={styles.container}><Text>Loading...</Text></View>;
+  const handleBack = () => {
+    router.back();
+  };
+
+  if (!habit) return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.centerContent}>
+        <Text>Loading habit...</Text>
+      </View>
+    </SafeAreaView>
+  );
+
+  const progressPercentage = (habit.completedDays.length / habit.goalDays) * 100;
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         
-        {/* --- Header Section --- */}
-        <View style={styles.headerContainer}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <ChevronLeft color="black" size={24} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{habit.action}</Text>
-          <View style={{ width: 24 }} /> {/* Spacer for centering */}
-        </View>
+        {/* --- Back Button --- */}
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <ChevronLeft color={COLORS.charcoal} size={24} />
+        </TouchableOpacity>
 
-        {/* --- To-Do List Section --- */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>To-Do List</Text>
+        {/* --- Summary Widget --- */}
+        <View style={styles.summaryWidget}>
+          <Text style={styles.habitName}>{habit.action}</Text>
+          <Text style={styles.summaryText}>
+            {habit.completedDays.length}/{habit.goalDays} days completed                                    {Math.min(progressPercentage, 100).toFixed(0)}%
+          </Text>
           
-          {/* Static UI items to match your image */}
-          <View style={styles.todoItem}>
-            <View style={styles.checkbox} />
+          {/* Progress Bar */}
+          <View style={styles.progressBarContainer}>
+            <View
+              style={[
+                styles.progressBar,
+                { width: `${Math.min(progressPercentage, 100)}%` },
+              ]}
+            />
           </View>
-          <View style={styles.todoItem}>
-            <View style={styles.checkbox} />
-          </View>
-
-          {/* Add Button */}
-          <TouchableOpacity style={styles.addButton}>
-            <Plus color="black" size={24} />
-          </TouchableOpacity>
-        </View>
-
-        {/* --- Summary Section --- */}
-        <View style={styles.summaryContainer}>
-          <Text style={styles.summaryText}>Short summary here</Text>
-          <Text style={styles.statsText}>
-            Streak: {habit.currentStreak} days {'\n'}
-            Goal: {habit.goalDays} days
+          <Text style={styles.progressLabel}>
+            Goal: {habit.goalDays} days  |  Current Streak: {habit.currentStreak} days 
           </Text>
         </View>
 
-        {/* --- Calendar Section --- */}
-        <View style={styles.calendarContainer}>
-          <Calendar
-            // Current month (default)
-            current={'2020-10-01'} // Hardcoded to match image, remove to use actual date
-            
-            onDayPress={onDayPress}
-            markedDates={markedDates}
-            
-            // Styling to match the clean look
-            theme={{
-              backgroundColor: '#ffffff',
-              calendarBackground: '#ffffff',
-              textSectionTitleColor: '#000000',
-              selectedDayBackgroundColor: '#FF4B4B',
-              selectedDayTextColor: '#ffffff',
-              todayTextColor: '#FF4B4B',
-              dayTextColor: '#2d4150',
-              textDisabledColor: '#d9e1e8',
-              arrowColor: 'black',
-              monthTextColor: 'black',
-              textDayFontWeight: '400',
-              textMonthFontWeight: 'bold',
-              textDayHeaderFontWeight: '500',
-              textDayFontSize: 16,
-              textMonthFontSize: 18,
-              textDayHeaderFontSize: 14,
-            }}
-          />
+        {/* --- Calendar Widget --- */}
+        <View style={styles.calendarWidget}>
+          <Text style={styles.widgetTitle}>Calendar</Text>
+          <View style={styles.calendarContainer}>
+            <Calendar
+              current={new Date().toISOString().split('T')[0]}
+              onDayPress={onDayPress}
+              markedDates={markedDates}
+              
+              theme={{
+                backgroundColor: COLORS.white,
+                calendarBackground: COLORS.white,
+                textSectionTitleColor: COLORS.charcoal,
+                selectedDayBackgroundColor: COLORS.accentBlue, // Highlighted day
+                selectedDayTextColor: COLORS.white,
+                todayTextColor: COLORS.accentBlue, // Today's text color
+                dayTextColor: COLORS.darkCharcoal, // Normal day text color
+                textDisabledColor: COLORS.lightGrey,
+                arrowColor: COLORS.charcoal,
+                monthTextColor: COLORS.charcoal,
+                textDayFontWeight: '400',
+                textMonthFontWeight: 'bold',
+                textDayHeaderFontWeight: '500',
+                textDayFontSize: 16,
+                textMonthFontSize: 18,
+                textDayHeaderFontSize: 14,
+              }}
+            />
+          </View>
+        </View>
+
+        {/* --- AI Chat Widget (Empty for now) --- */}
+        <View style={styles.aiChatWidget}>
+          <Text style={styles.widgetTitle}>AI Assistant</Text>
+          <View style={styles.emptyPlaceholder}>
+            <Text style={styles.placeholderText}>Coming soon...</Text>
+          </View>
         </View>
 
       </ScrollView>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.lightest, // Use the very light grey/blue for the background
   },
   scrollContent: {
     padding: 20,
+    paddingBottom: 40,
   },
-  // Header Styles
-  headerContainer: {
-    flexDirection: 'row',
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#EAEaea', // The light grey pill background
-    borderRadius: 30,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    marginBottom: 30,
   },
+
+  // Back Button
   backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: 'black',
+    marginBottom: 20,
+    padding: 8,
+    alignSelf: 'flex-start',
   },
 
-  // Section Styles
-  section: {
-    marginBottom: 25,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#007AFF', // Blue color like the image
-    textDecorationLine: 'underline',
-    marginBottom: 15,
-  },
-  todoItem: {
-    backgroundColor: '#D9D9D9', // Grey bars
-    height: 50,
-    borderRadius: 12,
-    marginBottom: 10,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingHorizontal: 15,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    backgroundColor: 'white', // White checkbox inside grey bar
-    borderRadius: 6,
-    opacity: 0.8,
-  },
-  addButton: {
-    backgroundColor: '#D9D9D9',
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 5,
-  },
-
-  // Summary Styles
-  summaryContainer: {
-    height: 120,
-    borderWidth: 1,
-    borderColor: 'black',
+  // Summary Widget Styles
+  summaryWidget: {
+    backgroundColor: COLORS.white,
     borderRadius: 15,
     padding: 20,
-    justifyContent: 'center',
-    marginBottom: 30,
-    backgroundColor: 'white',
+    marginBottom: 25,
+    shadowColor: COLORS.mediumGrey, // Softer shadow color
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: COLORS.lightBlue, // Add a light blue border for a frosty look
+  },
+  habitName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.charcoal,
+    marginBottom: 8,
   },
   summaryText: {
-    fontSize: 16,
-    color: 'black',
-    marginBottom: 10,
-  },
-  statsText: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.mediumGrey,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  progressBarContainer: {
+    height: 12,
+    backgroundColor: COLORS.lightBlue, // Light blue track for the progress bar
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: COLORS.accentBlue, // Bright accent blue for the progress fill
+    borderRadius: 6,
+  },
+  progressLabel: {
+    fontSize: 13,
+    color: COLORS.mediumGrey,
+    fontWeight: '500',
   },
 
-  // Calendar Styles
-  calendarContainer: {
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
+  // Calendar Widget Styles
+  calendarWidget: {
+    backgroundColor: COLORS.white,
     borderRadius: 15,
-    padding: 10,
-    backgroundColor: 'white',
-    // Shadow for elevation
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    padding: 20,
+    marginBottom: 25,
+    shadowColor: COLORS.mediumGrey,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: COLORS.lightBlue, // Light blue border
+  },
+  widgetTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.charcoal,
+    marginBottom: 16,
+  },
+  calendarContainer: {
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+
+  // AI Chat Widget Styles
+  aiChatWidget: {
+    backgroundColor: COLORS.white,
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 25,
+    shadowColor: COLORS.mediumGrey,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    minHeight: 200,
+    borderWidth: 1,
+    borderColor: COLORS.lightBlue, // Light blue border
+  },
+  emptyPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 150,
+    backgroundColor: COLORS.lightest, // Use the lightest color for the placeholder background
+    borderRadius: 10,
+  },
+  placeholderText: {
+    fontSize: 14,
+    color: COLORS.mediumGrey,
+    fontStyle: 'italic',
   },
 });
