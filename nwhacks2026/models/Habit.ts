@@ -3,14 +3,15 @@
  * Two types supported:
  * 1. SoloHabit - Individual habit tracking
  * 2. GroupHabit - Habit with multiple phone numbers for group accountability
- * 
- * See SoloHabit.ts and GroupHabit.ts for the concrete implementations.
  */
 
-//import { SoloHabit } from './SoloHabit';
-//import { GroupHabit } from './GroupHabit';
-
 export interface HabitData {
+  /**
+   * Explicit discriminator so a GroupHabit can exist even with 0 members.
+   * (Otherwise an empty phoneNumbers array would look like a SoloHabit.)
+   */
+  type?: "solo" | "group";
+
   id: string;
   action: string;
   goalDays: number;
@@ -20,7 +21,14 @@ export interface HabitData {
   completedDays: string[]; // Array of dates (YYYY-MM-DD) when habit was completed
   daysPerWeekDone: number; // Number of days completed in the current week
   isActive: boolean;
-  phoneNumbers?: string[]; // For GroupHabit only
+
+  // For GroupHabit only
+  phoneNumbers?: string[];
+
+  // GroupHabit extras
+  groupId?: string; // Invite code / shared group identifier
+  memberCompletedDays?: Record<string, string[]>; // phoneNumber -> completed days
+  failedDays?: string[]; // dates the group failed (missed deadline)
 }
 
 export abstract class Habit {
@@ -67,9 +75,23 @@ export abstract class Habit {
    * Mark today as completed for this habit
    */
   markAsCompleted(): void {
-    const today = this.getTodayString();
-    if (!this.completedDays.includes(today)) {
-      this.completedDays.push(today);
+    this.markDayAsCompleted(this.getTodayString());
+  }
+
+  /**
+   * Unmark today as completed
+   */
+  unmarkAsCompleted(): void {
+    this.unmarkDayAsCompleted(this.getTodayString());
+  }
+
+  /**
+   * Mark a specific YYYY-MM-DD day as completed.
+   * Needed for GroupHabit + "finalize yesterday" logic.
+   */
+  protected markDayAsCompleted(day: string): void {
+    if (!this.completedDays.includes(day)) {
+      this.completedDays.push(day);
       this.updateWeeklyProgress();
       this.updateStreak();
       this.updatedAt = new Date();
@@ -77,11 +99,10 @@ export abstract class Habit {
   }
 
   /**
-   * Unmark today as completed
+   * Unmark a specific YYYY-MM-DD day as completed.
    */
-  unmarkAsCompleted(): void {
-    const today = this.getTodayString();
-    this.completedDays = this.completedDays.filter((day) => day !== today);
+  protected unmarkDayAsCompleted(day: string): void {
+    this.completedDays = this.completedDays.filter((d) => d !== day);
     this.updateWeeklyProgress();
     this.updateStreak();
     this.updatedAt = new Date();
@@ -97,7 +118,7 @@ export abstract class Habit {
   /**
    * Update the current streak based on completed days
    */
-  private updateStreak(): void {
+  protected updateStreak(): void {
     if (this.completedDays.length === 0) {
       this.currentStreak = 0;
       return;
@@ -105,6 +126,7 @@ export abstract class Habit {
 
     const sortedDays = [...this.completedDays].sort();
     let streak = 1;
+
     const today = this.getTodayString();
     let expectedDate = new Date(today);
 
@@ -112,15 +134,12 @@ export abstract class Habit {
       const currentDay = sortedDays[i];
       const currentDate = new Date(currentDay);
 
-      if (
-        i === sortedDays.length - 1 &&
-        currentDate.toISOString().split("T")[0] === today
-      ) {
+      if (i === sortedDays.length - 1 && this.formatDateLocal(currentDate) === today) {
         streak = 1;
-        expectedDate = new Date(currentDate);
+        expectedDate = new Date(currentDate.getTime());
         expectedDate.setDate(expectedDate.getDate() - 1);
       } else {
-        const expectedDateStr = expectedDate.toISOString().split("T")[0];
+        const expectedDateStr = this.formatDateLocal(expectedDate);
         if (currentDay === expectedDateStr) {
           streak++;
           expectedDate.setDate(expectedDate.getDate() - 1);
@@ -134,35 +153,28 @@ export abstract class Habit {
   }
 
   /**
-   * Update weekly progress and adjust goalDays if week is incomplete
+   * Update weekly progress
    */
-  private updateWeeklyProgress(): void {
-    // Get the start of current week (Monday)
+  protected updateWeeklyProgress(): void {
     const today = new Date(this.getTodayString());
-    const weekStart = new Date(today);
+
+    // Monday as week start
+    const weekStart = new Date(today.getTime());
     const day = today.getDay();
     const diff = today.getDate() - day + (day === 0 ? -6 : 1);
     weekStart.setDate(diff);
 
-    // Count completions in current week
+    // Count completions in current week up to today
     let weekCompletions = 0;
     for (let i = 0; i < 7; i++) {
-      const checkDate = new Date(weekStart);
+      const checkDate = new Date(weekStart.getTime());
       checkDate.setDate(checkDate.getDate() + i);
-      const dateStr = checkDate.toISOString().split("T")[0];
 
-      // Stop counting if we haven't reached that day yet
-      if (checkDate > today) {
-        break;
-      }
+      if (checkDate > today) break;
 
-      if (this.completedDays.includes(dateStr)) {
-        weekCompletions++;
-      }
+      const dateStr = this.formatDateLocal(checkDate);
+      if (this.completedDays.includes(dateStr)) weekCompletions++;
     }
-
-    // If it's the end of the week and we didn't meet the goal, add shortfall to goalDays
-    const daysIntoWeek = Math.floor((today.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
     this.daysPerWeekDone = weekCompletions;
   }
@@ -185,30 +197,26 @@ export abstract class Habit {
    * Edit the habit
    */
   edit(action?: string, goalDays?: number): void {
-    if (action !== undefined) {
-      this.action = action;
-    }
-    if (goalDays !== undefined && goalDays > 0) {
-      this.goalDays = goalDays;
-    }
+    if (action !== undefined) this.action = action;
+    if (goalDays !== undefined && goalDays > 0) this.goalDays = goalDays;
     this.updatedAt = new Date();
   }
 
   /**
-   * Get the current date as YYYY-MM-DD string
+   * Get current local date as YYYY-MM-DD
+   * MUST be protected so GroupHabit can use it.
    */
-  private getTodayString(): string {
-    return new Date().toISOString().split("T")[0];
+  protected getTodayString(): string {
+    return this.formatDateLocal(new Date());
   }
 
   /**
-   * Create a Habit instance from plain object
-   
-  static fromJSON(data: HabitData): Habit {
-    if (data.phoneNumbers && data.phoneNumbers.length > 0) {
-      return GroupHabit.fromJSON(data);
-    }
-    return SoloHabit.fromJSON(data);
-  }*/
+   * Format a Date as YYYY-MM-DD in the user's LOCAL timezone.
+   */
+  protected formatDateLocal(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
 }
-

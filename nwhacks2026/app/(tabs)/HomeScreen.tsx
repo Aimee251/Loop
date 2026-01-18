@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, SafeAreaView, ScrollView, 
   TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, 
-  Platform, ActivityIndicator, Dimensions 
+  Platform, ActivityIndicator, Dimensions, Alert 
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from "expo-router"; 
@@ -31,7 +31,9 @@ const COLORS = {
   primaryBtn: '#000000',
 };
 
-const DEFAULT_GOAL_DAYS = 66; 
+// Goal days is now user-provided (required)
+const MIN_GOAL_DAYS = 7;
+const MAX_GOAL_DAYS = 120;
 
 // --- ANIMATED CARD COMPONENT ---
 // We extract this to manage individual animations efficiently
@@ -68,9 +70,6 @@ const HabitCard = ({
     // Scale effect (pop up slightly when active)
     const scale = interpolate(animation.value, [0, 1], [0.95, 1]);
 
-    // Z-index trick: We can't animate zIndex, but we can update it via JS state in parent.
-    // However, we can animate visual elevation/shadow.
-    
     return {
       marginTop,
       height,
@@ -152,6 +151,12 @@ export default function MainScreen() {
   const [isGroupMode, setIsGroupMode] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
 
+  // Required goal duration input
+  const [goalDaysInput, setGoalDaysInput] = useState('');
+  const [optimalDaysLoading, setOptimalDaysLoading] = useState(false);
+  const [optimalDaysWhy, setOptimalDaysWhy] = useState<string>('');
+  const [optimalDaysRange, setOptimalDaysRange] = useState<[number, number] | null>(null);
+
   useEffect(() => {
     refreshHabits();
     if (currentMood) fetchAiForHabits(currentMood);
@@ -176,16 +181,58 @@ export default function MainScreen() {
     setAiLoading(false);
   };
 
+  const parseGoalDays = (): number | null => {
+    const n = Number(goalDaysInput);
+    if (!Number.isFinite(n)) return null;
+    const days = Math.round(n);
+    if (days < MIN_GOAL_DAYS || days > MAX_GOAL_DAYS) return null;
+    return days;
+  };
+
+  const handleGenerateOptimalDays = async () => {
+    if (!habitName.trim()) {
+      Alert.alert('Required', 'Enter a habit name first.');
+      return;
+    }
+
+    try {
+      setOptimalDaysLoading(true);
+      // Duration is computed habit-first (not mood-based). Use a fixed tag.
+      const res = await getMoodAdjustedTask({ moodTag: 'neutral', habitAction: habitName.trim() });
+      setGoalDaysInput(String(res.recommendedDays));
+      setOptimalDaysWhy(res.daysWhy);
+      setOptimalDaysRange(res.recommendedRange);
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Could not generate', 'Something went wrong generating an optimal duration.');
+    } finally {
+      setOptimalDaysLoading(false);
+    }
+  };
+
   const handleCreateHabit = () => {
     if (!habitName.trim()) return Alert.alert("Required", "Enter a name");
-    if (isGroupMode) {
-       habitManager.createGroupHabit(habitName, DEFAULT_GOAL_DAYS, [phoneNumber]);
-    } else {
-       habitManager.createSoloHabit(habitName, DEFAULT_GOAL_DAYS);
+
+    const goalDays = parseGoalDays();
+    if (!goalDays) {
+      return Alert.alert(
+        'Required',
+        `Enter a duration between ${MIN_GOAL_DAYS} and ${MAX_GOAL_DAYS} days (or tap “Generate Optimal”).`
+      );
     }
-    setHabitName(''); 
-    setPhoneNumber(''); 
+
+    if (isGroupMode) {
+       if (!phoneNumber.trim()) return Alert.alert('Required', "Enter your friend's phone number");
+       habitManager.createGroupHabit(habitName.trim(), goalDays, [phoneNumber.trim()]);
+    } else {
+       habitManager.createSoloHabit(habitName.trim(), goalDays);
+    }
+    setHabitName('');
+    setPhoneNumber('');
     setIsGroupMode(false);
+    setGoalDaysInput('');
+    setOptimalDaysWhy('');
+    setOptimalDaysRange(null);
     setAddModalVisible(false);
     refreshHabits();
     if (currentMood) fetchAiForHabits(currentMood); 
@@ -198,6 +245,16 @@ export default function MainScreen() {
 
   const toggleCard = (id) => {
     setExpandedCardId(prev => prev === id ? null : id);
+  };
+
+  const closeAddModal = () => {
+    setAddModalVisible(false);
+    setHabitName('');
+    setPhoneNumber('');
+    setIsGroupMode(false);
+    setGoalDaysInput('');
+    setOptimalDaysWhy('');
+    setOptimalDaysRange(null);
   };
 
   return (
@@ -251,20 +308,63 @@ export default function MainScreen() {
       </ScrollView>
 
       {/* --- ADD MODAL --- */}
-      <Modal visible={addModalVisible} animationType="slide" transparent={true} onRequestClose={() => setAddModalVisible(false)}>
+      <Modal visible={addModalVisible} animationType="slide" transparent={true} onRequestClose={closeAddModal}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
           <View style={styles.addModalContent}>
             <View style={styles.modalHeaderRow}>
                <Text style={styles.modalTitle}>New Habit</Text>
-               <TouchableOpacity onPress={() => setAddModalVisible(false)}>
+               <TouchableOpacity onPress={closeAddModal}>
                  <Ionicons name="close-circle" size={30} color={COLORS.textSecondary} />
                </TouchableOpacity>
             </View>
 
             <TextInput 
               style={styles.input} placeholder="Habit Name" 
-              value={habitName} onChangeText={setHabitName}
+              value={habitName}
+              onChangeText={(t) => {
+                setHabitName(t);
+                // If the habit name changes, reset the "optimal" explanation so it doesn't mismatch.
+                setOptimalDaysWhy('');
+                setOptimalDaysRange(null);
+              }}
             />
+
+            {/* Duration (required) */}
+            <View style={styles.durationRow}>
+              <TextInput
+                style={[styles.input, styles.durationInput]}
+                placeholder={`Duration (${MIN_GOAL_DAYS}-${MAX_GOAL_DAYS} days)`}
+                value={goalDaysInput}
+                onChangeText={(t) => {
+                  // Allow only digits
+                  const cleaned = t.replace(/[^0-9]/g, '');
+                  setGoalDaysInput(cleaned);
+                }}
+                keyboardType="number-pad"
+              />
+
+              <TouchableOpacity
+                style={[styles.optimalBtn, (!habitName.trim() || optimalDaysLoading) && styles.optimalBtnDisabled]}
+                disabled={!habitName.trim() || optimalDaysLoading}
+                onPress={handleGenerateOptimalDays}
+              >
+                {optimalDaysLoading ? (
+                  <ActivityIndicator size="small" color={COLORS.textPrimary} />
+                ) : (
+                  <Text style={styles.optimalBtnText}>Generate Optimal</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {!!optimalDaysWhy && (
+              <View style={styles.optimalExplainBox}>
+                <Text style={styles.optimalExplainTitle}>
+                  Why {goalDaysInput || 'this'} days?
+                  {optimalDaysRange ? ` (range: ${optimalDaysRange[0]}–${optimalDaysRange[1]})` : ''}
+                </Text>
+                <Text style={styles.optimalExplainText}>{optimalDaysWhy}</Text>
+              </View>
+            )}
 
             <View style={styles.modeRow}>
                <TouchableOpacity onPress={() => setIsGroupMode(false)} style={[styles.modeBtn, !isGroupMode && styles.modeBtnActive]}>
@@ -354,6 +454,33 @@ const styles = StyleSheet.create({
   modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
   modalTitle: { fontSize: 20, fontWeight: '700' },
   input: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginBottom: 15, fontSize: 16 },
+
+  // Duration input + generator
+  durationRow: { flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 10 },
+  durationInput: { flex: 1, marginBottom: 0 },
+  optimalBtn: { 
+    paddingHorizontal: 14,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#C7C7CC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  optimalBtnDisabled: { opacity: 0.5 },
+  optimalBtnText: { fontWeight: '700', color: COLORS.textPrimary, fontSize: 12 },
+  optimalExplainBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  optimalExplainTitle: { fontSize: 12, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 8 },
+  optimalExplainText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 18 },
+
   modeRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   modeBtn: { flex: 1, padding: 12, backgroundColor: '#E5E5EA', borderRadius: 10, alignItems: 'center' },
   modeBtnActive: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#C7C7CC' },
