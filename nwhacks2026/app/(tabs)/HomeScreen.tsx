@@ -573,7 +573,7 @@ export default function MainScreen() {
         <TouchableOpacity style={styles.addButton} onPress={() => setAddModalVisible(true)}>
           <Ionicons name="add" size={32} color="#FFF" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/we-screen')}>
           <Ionicons name="stats-chart" size={24} color="#C5C5C7" />
         </TouchableOpacity>
       </View>
