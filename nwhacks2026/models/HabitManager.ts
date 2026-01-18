@@ -1,9 +1,18 @@
 /**
  * HabitManager handles all CRUD operations for habits.
  * This is a service class that manages both SoloHabit and GroupHabit storage and operations.
+ *
+ * Group Habit rule (deadline-based):
+ *  - Members mark themselves completed for a given day.
+ *  - A day is only "completed" for the group if EVERY member completed it.
+ *  - When the day ends, if ANY member did NOT complete, the whole group FAILS that day.
+ *
+ * NOTE: HabitManager does not automatically know when a day ends.
+ * In React Native, you typically call `finalizeGroupHabitsForDay(yesterday)`
+ * when the app opens / returns to foreground.
  */
 
-import { Habit, HabitData } from './Habit';
+import { Habit } from './Habit';
 import { SoloHabit } from './SoloHabit';
 import { GroupHabit } from './GroupHabit';
 
@@ -68,6 +77,62 @@ export class HabitManager {
   }
 
   /**
+   * Join an existing group habit using its invite code (groupId).
+   * Returns the updated GroupHabit if found.
+   */
+  joinGroupHabitByCode(groupCode: string, phoneNumber: string): GroupHabit | null {
+    const groupHabit = Array.from(this.habits.values()).find(
+      (h) => h instanceof GroupHabit && (h as GroupHabit).groupId === groupCode
+    ) as GroupHabit | undefined;
+
+    if (!groupHabit) return null;
+    groupHabit.addPhoneNumber(phoneNumber);
+    this.saveHabits();
+    return groupHabit;
+  }
+
+  /**
+   * Convenience: join a group habit by its habit id.
+   */
+  joinGroupHabitById(habitId: string, phoneNumber: string): GroupHabit | null {
+    const habit = this.habits.get(habitId);
+    if (!(habit instanceof GroupHabit)) return null;
+    habit.addPhoneNumber(phoneNumber);
+    this.saveHabits();
+    return habit;
+  }
+
+  /**
+   * Mark a specific member as completed for a date (group habits only).
+   * If dateStr is omitted, GroupHabit defaults to "today".
+   *
+   * dateStr format: "YYYY-MM-DD" (local day)
+   */
+  markGroupMemberCompleted(habitId: string, phoneNumber: string, dateStr?: string): GroupHabit | null {
+    const habit = this.habits.get(habitId);
+    if (!(habit instanceof GroupHabit)) return null;
+    habit.markMemberCompleted(phoneNumber, dateStr);
+    this.saveHabits();
+    return habit;
+  }
+
+  /**
+   * Enforce the deadline rule for a specific day (group habits only):
+   * If ANY member did NOT complete by that day, the whole group fails that day.
+   *
+   * Call this when the app opens (typically for "yesterday"),
+   * or from a scheduled job/backend.
+   */
+  finalizeGroupHabitsForDay(day: string): void {
+    for (const habit of this.habits.values()) {
+      if (habit instanceof GroupHabit && habit.isActive) {
+        habit.finalizeDay(day);
+      }
+    }
+    this.saveHabits();
+  }
+
+  /**
    * Create a new habit (legacy method - creates SoloHabit)
    */
   createHabit(action: string, goalDays: number): SoloHabit | null {
@@ -98,11 +163,7 @@ export class HabitManager {
   /**
    * Update a habit
    */
-  updateHabit(
-    id: string,
-    action?: string,
-    goalDays?: number
-  ): Habit | undefined {
+  updateHabit(id: string, action?: string, goalDays?: number): Habit | undefined {
     const habit = this.habits.get(id);
     if (habit) {
       habit.edit(action, goalDays);
@@ -139,6 +200,7 @@ export class HabitManager {
 
   /**
    * Mark a habit as completed for today
+   * (Solo habits use this; group habits should use markGroupMemberCompleted)
    */
   markHabitAsCompleted(id: string): Habit | undefined {
     const habit = this.habits.get(id);
