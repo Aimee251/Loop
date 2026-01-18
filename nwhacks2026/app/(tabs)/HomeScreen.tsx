@@ -2,36 +2,150 @@ import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, SafeAreaView, ScrollView, 
   TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, 
-  Platform, Alert, ActivityIndicator, Dimensions 
+  Platform, ActivityIndicator, Dimensions 
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from "expo-router"; 
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring, 
+  withTiming,
+  interpolate,
+  Extrapolation 
+} from 'react-native-reanimated';
 
-// --- UPDATED IMPORT ---
-// We import the 'habitManager' instance, not just the class
 import { habitManager } from '@/models/HabitManager'; 
 import { getMoodAdjustedTask } from '@/utils/moodAi';
 
 // --- CONSTANTS ---
 const COLORS = {
-  background: '#FDFBF7', textPrimary: '#4A4A4A', textSecondary: '#8E8E93',
-  card1: '#E6EEFA', card2: '#E3F2E1', card3: '#FAE6E6',
-  navBar: '#FFFFFF', modalOverlay: 'rgba(0,0,0,0.3)', primaryBtn: '#4A4A4A',
+  background: '#F2F2F7', 
+  textPrimary: '#1C1C1E',
+  textSecondary: '#8E8E93',
+  card1: '#DCE8FA', 
+  card2: '#DEF5DB', 
+  card3: '#FBE4E4',
+  navBar: '#FFFFFF', 
+  modalOverlay: 'rgba(0,0,0,0.5)', 
+  primaryBtn: '#000000',
 };
 
-const DEFAULT_GOAL_DAYS = 66; // Standard habit formation time
+const DEFAULT_GOAL_DAYS = 66; 
 
-const { height } = Dimensions.get('window');
+// --- ANIMATED CARD COMPONENT ---
+// We extract this to manage individual animations efficiently
+const HabitCard = ({ 
+  habit, 
+  index, 
+  aiInfo, 
+  isExpanded, 
+  onPress, 
+  onDelete 
+}) => {
+  // 1. Define the animation driver (0 = collapsed, 1 = expanded)
+  // We rely on the parent prop 'isExpanded' to trigger changes
+  const animation = useSharedValue(0);
 
+  useEffect(() => {
+    // Smooth spring animation for natural movement
+    animation.value = withSpring(isExpanded ? 1 : 0, {
+      damping: 100,    // Controls "bounciness" (lower = more bounce)
+      stiffness: 1000, // Controls speed
+    });
+  }, [isExpanded]);
+
+  // 2. Interpolate styles based on animation value
+  const animatedStyle = useAnimatedStyle(() => {
+    // Calculated margin: collapsed = -120 (stack), expanded = 20 (breathing room)
+    const marginTop = index === 0 
+      ? withTiming(isExpanded ? 20 : 0) // First card just slides down a bit
+      : interpolate(animation.value, [0, 1], [-130, 20]); // Others slide out from stack
+
+    // Height change
+    const height = interpolate(animation.value, [0, 1], [200, 300]);
+    
+    // Scale effect (pop up slightly when active)
+    const scale = interpolate(animation.value, [0, 1], [0.95, 1]);
+
+    // Z-index trick: We can't animate zIndex, but we can update it via JS state in parent.
+    // However, we can animate visual elevation/shadow.
+    
+    return {
+      marginTop,
+      height,
+      transform: [{ scale }],
+      zIndex: isExpanded ? 100 : index, // Ensure active card is on top
+    };
+  });
+
+  // Fade in content when expanded
+  const contentStyle = useAnimatedStyle(() => {
+    return {
+      opacity: interpolate(animation.value, [0, 0.5, 1], [0, 0, 1], Extrapolation.CLAMP),
+      transform: [
+        { translateY: interpolate(animation.value, [0, 1], [20, 0]) }
+      ]
+    };
+  });
+
+  const cardColor = [COLORS.card1, COLORS.card2, COLORS.card3][index % 3];
+
+  return (
+    <Animated.View style={[styles.card, { backgroundColor: cardColor }, animatedStyle]}>
+      <TouchableOpacity 
+        activeOpacity={0.9} 
+        onPress={() => onPress(habit.id)} 
+        style={styles.cardInner}
+      >
+        {/* HEADER (Always Visible) */}
+        <View style={styles.cardHeader}>
+          <View style={styles.headerLeft}>
+            <MaterialCommunityIcons 
+              name={habit.phoneNumbers && habit.phoneNumbers.length > 0 ? "account-group" : "water-outline"} 
+              size={28} color={COLORS.textPrimary} 
+            />
+            <Text style={styles.cardTitle}>{habit.action}</Text>
+          </View>
+          
+          {isExpanded ? (
+            <TouchableOpacity onPress={() => onDelete(habit.id)} style={styles.iconBtn}>
+              <Ionicons name="trash-outline" size={22} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} style={{ opacity: 0.5 }}/>
+          )}
+        </View>
+
+        {/* EXPANDED CONTENT */}
+        <Animated.View style={[styles.cardBody, contentStyle]}>
+          {aiInfo ? (
+            <View>
+              <Text style={styles.aiLabel}>ADJUSTED GOAL</Text>
+              <Text style={styles.aiTask}>{aiInfo.modifiedTask}</Text>
+              <Text style={styles.aiNote}>{aiInfo.researchNote}</Text>
+            </View>
+          ) : (
+            <Text style={styles.loadingTextSmall}>Syncing with mood...</Text>
+          )}
+        </Animated.View>
+
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+
+// --- MAIN SCREEN ---
 export default function MainScreen() {
-  // 1. Get Mood from URL Params
   const { mood } = useLocalSearchParams(); 
-  const currentMood = mood || 'calm'; // Default fallback
+  const currentMood = mood || 'calm'; 
 
   const [habits, setHabits] = useState([]);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiData, setAiData] = useState({}); 
+  const [expandedCardId, setExpandedCardId] = useState(null);
 
   // Form State
   const [habitName, setHabitName] = useState('');
@@ -43,10 +157,8 @@ export default function MainScreen() {
     if (currentMood) fetchAiForHabits(currentMood);
   }, [currentMood]);
 
-  // --- FIXED: Use the instance method and spread the result ---
   const refreshHabits = () => {
     const activeHabits = habitManager.getActiveHabits();
-    // We use [...array] to create a new reference so React knows to re-render
     setHabits([...activeHabits]);
   };
 
@@ -54,40 +166,28 @@ export default function MainScreen() {
     setAiLoading(true);
     const currentHabits = habitManager.getActiveHabits();
     const newAiData = {};
-
     await Promise.all(currentHabits.map(async (h) => {
       try {
         const res = await getMoodAdjustedTask({ moodTag, habitAction: h.action });
         newAiData[h.id] = res;
       } catch (e) { console.error(e); }
     }));
-
     setAiData(newAiData);
     setAiLoading(false);
   };
 
   const handleCreateHabit = () => {
     if (!habitName.trim()) return Alert.alert("Required", "Enter a name");
-    
-    // --- FIXED: Pass correct arguments to Manager ---
     if (isGroupMode) {
-        // Group Habit requires: action, goalDays, phoneNumbers (Array)
-        habitManager.createGroupHabit(habitName, DEFAULT_GOAL_DAYS, [phoneNumber]);
+       habitManager.createGroupHabit(habitName, DEFAULT_GOAL_DAYS, [phoneNumber]);
     } else {
-        // Solo Habit requires: action, goalDays
-        habitManager.createSoloHabit(habitName, DEFAULT_GOAL_DAYS);
+       habitManager.createSoloHabit(habitName, DEFAULT_GOAL_DAYS);
     }
-
-    // Reset Form
     setHabitName(''); 
     setPhoneNumber(''); 
     setIsGroupMode(false);
     setAddModalVisible(false);
-    
-    // Refresh UI
     refreshHabits();
-    
-    // Fetch AI for the new list
     if (currentMood) fetchAiForHabits(currentMood); 
   };
 
@@ -96,80 +196,69 @@ export default function MainScreen() {
     refreshHabits();
   };
 
+  const toggleCard = (id) => {
+    setExpandedCardId(prev => prev === id ? null : id);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        contentOffset={{ x: 0, y: -20 }}
+      >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.greetingSub}>Today's Plan</Text>
+          <View>
+            <Text style={styles.greetingSub}>Loop</Text>
+            <Text style={styles.dateText}>Your Habit Porgress</Text>
+          </View>
           <View style={styles.moodBadge}>
-             <Text style={styles.moodText}>Mood: {typeof currentMood === 'string' ? currentMood.charAt(0).toUpperCase() + currentMood.slice(1) : ''}</Text>
+             <Text style={styles.moodText}>{typeof currentMood === 'string' ? currentMood.charAt(0).toUpperCase() + currentMood.slice(1) : ''}</Text>
           </View>
         </View>
 
-        {/* AI Loading Indicator */}
+        {/* AI Loading */}
         {aiLoading && (
            <View style={styles.loadingRow}>
              <ActivityIndicator size="small" color={COLORS.textPrimary} />
-             <Text style={styles.loadingText}>Tailoring habits to your mood...</Text>
+             <Text style={styles.loadingText}>Syncing Mood...</Text>
            </View>
         )}
 
-        {/* Habit List */}
-        {habits.length === 0 ? (
-             <View style={{padding: 20, alignItems: 'center'}}>
-                <Text style={{color: COLORS.textSecondary}}>No habits yet. Tap + to start.</Text>
+        {/* --- STACKED CARD LIST --- */}
+        <View style={styles.cardStackContainer}>
+          {habits.length === 0 ? (
+             <View style={styles.emptyState}>
+                <Text style={{color: COLORS.textSecondary}}>No cards found.</Text>
              </View>
-        ) : (
-            habits.map((habit, index) => {
-            const cardColor = [COLORS.card1, COLORS.card2, COLORS.card3][index % 3];
-            const aiInfo = aiData[habit.id];
-
-            return (
-                <View key={habit.id} style={[styles.card, { backgroundColor: cardColor }]}>
-                <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitle}>{habit.action}</Text>
-                    <TouchableOpacity onPress={() => handleDelete(habit.id)}>
-                        <Text style={styles.actionText}>Delete</Text>
-                    </TouchableOpacity>
-                </View>
-                
-                <View style={styles.cardBody}>
-                    <View style={styles.circleLogo}>
-                        <MaterialCommunityIcons 
-                        // Determine icon based on if phoneNumbers exist (GroupHabit)
-                        name={habit.phoneNumbers && habit.phoneNumbers.length > 0 ? "account-group" : "water-outline"} 
-                        size={32} color={COLORS.textPrimary} 
-                        />
-                    </View>
-
-                    {aiInfo ? (
-                    <View style={styles.aiContainer}>
-                        <Text style={styles.aiLabel}>Adjusted Goal:</Text>
-                        <Text style={styles.aiTask}>{aiInfo.modifiedTask}</Text>
-                        <Text style={styles.aiNote}>{aiInfo.researchNote}</Text>
-                    </View>
-                    ) : (
-                        <Text style={styles.loadingTextSmall}>Loading adjustment...</Text>
-                    )}
-                </View>
-                </View>
-            );
-            })
-        )}
+          ) : (
+            habits.map((habit, index) => (
+              <HabitCard 
+                key={habit.id}
+                habit={habit}
+                index={index}
+                aiInfo={aiData[habit.id]}
+                isExpanded={expandedCardId === habit.id}
+                onPress={toggleCard}
+                onDelete={handleDelete}
+              />
+            ))
+          )}
+        </View>
         
-        <View style={{ height: 100 }} /> 
+        <View style={{ height: 120 }} /> 
       </ScrollView>
 
-      {/* Add Habit Modal */}
+      {/* --- ADD MODAL --- */}
       <Modal visible={addModalVisible} animationType="slide" transparent={true} onRequestClose={() => setAddModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
           <View style={styles.addModalContent}>
             <View style={styles.modalHeaderRow}>
-              <TouchableOpacity onPress={() => setAddModalVisible(false)}>
-                 <Text style={styles.modalTitle}>New Habit</Text>
-              </TouchableOpacity>
+               <Text style={styles.modalTitle}>New Habit</Text>
+               <TouchableOpacity onPress={() => setAddModalVisible(false)}>
+                 <Ionicons name="close-circle" size={30} color={COLORS.textSecondary} />
+               </TouchableOpacity>
             </View>
 
             <TextInput 
@@ -179,10 +268,10 @@ export default function MainScreen() {
 
             <View style={styles.modeRow}>
                <TouchableOpacity onPress={() => setIsGroupMode(false)} style={[styles.modeBtn, !isGroupMode && styles.modeBtnActive]}>
-                 <Text>Me Mode</Text>
+                 <Text style={{fontWeight: !isGroupMode ? '700' : '400'}}>Solo</Text>
                </TouchableOpacity>
                <TouchableOpacity onPress={() => setIsGroupMode(true)} style={[styles.modeBtn, isGroupMode && styles.modeBtnActive]}>
-                 <Text>We Mode</Text>
+                 <Text style={{fontWeight: isGroupMode ? '700' : '400'}}>Group</Text>
                </TouchableOpacity>
             </View>
 
@@ -194,7 +283,7 @@ export default function MainScreen() {
             )}
 
             <TouchableOpacity style={styles.createBtn} onPress={handleCreateHabit}>
-               <Text style={{color: '#FFF', fontWeight: 'bold'}}>Create Habit</Text>
+               <Text style={{color: '#FFF', fontWeight: 'bold'}}>Add Habit</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -203,13 +292,13 @@ export default function MainScreen() {
       {/* Bottom Nav */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/')}>
-          <Ionicons name="home" size={28} color={COLORS.textPrimary}/>
+          <Ionicons name="wallet" size={28} color={COLORS.textPrimary}/>
         </TouchableOpacity>
         <TouchableOpacity style={styles.addButton} onPress={() => setAddModalVisible(true)}>
           <Ionicons name="add" size={32} color="#FFF" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem}>
-           <View style={styles.placeholderIcon}/>
+           <Ionicons name="stats-chart" size={24} color="#C5C5C7"/>
         </TouchableOpacity>
       </View>
 
@@ -219,34 +308,58 @@ export default function MainScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  scrollContent: { padding: 24 },
-  header: { marginBottom: 20, marginTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  greetingSub: { fontSize: 28, fontWeight: '300', color: COLORS.textPrimary },
-  moodBadge: { backgroundColor: '#E0E0E0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  moodText: { fontWeight: '600', color: COLORS.textPrimary, fontSize: 14 },
-  loadingRow: { flexDirection: 'row', gap: 10, marginBottom: 15 },
-  loadingText: { color: COLORS.textSecondary, fontStyle: 'italic' },
-  card: { borderRadius: 24, padding: 20, marginBottom: 20, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  cardTitle: { fontSize: 20, fontWeight: '600', color: COLORS.textPrimary },
-  actionText: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '500' },
-  cardBody: { alignItems: 'center', marginVertical: 10 },
-  circleLogo: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.6)', alignItems: 'center', justifyContent: 'center', marginBottom: 15 },
-  aiContainer: { alignItems: 'center', paddingHorizontal: 10 },
-  aiLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 4, textTransform: 'uppercase' },
-  aiTask: { fontSize: 18, fontWeight: '600', textAlign: 'center', color: COLORS.textPrimary, marginBottom: 5 },
-  aiNote: { fontSize: 12, color: COLORS.textPrimary, textAlign: 'center', opacity: 0.7, fontStyle: 'italic' },
-  loadingTextSmall: { fontSize: 12, color: COLORS.textSecondary, fontStyle: 'italic' },
+  scrollContent: { padding: 20, paddingTop: 10 },
+  
+  header: { marginBottom: 30, marginTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  greetingSub: { fontSize: 34, fontWeight: '800', color: COLORS.textPrimary },
+  dateText: { fontSize: 16, color: COLORS.textSecondary, fontWeight: '500', marginTop: -5 },
+  moodBadge: { backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 30, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 },
+  moodText: { fontWeight: '700', color: COLORS.textPrimary, fontSize: 14 },
+  
+  loadingRow: { flexDirection: 'row', gap: 10, marginBottom: 20, justifyContent: 'center' },
+  loadingText: { color: COLORS.textSecondary, fontSize: 12 },
+
+  // --- STACK STYLES ---
+  cardStackContainer: { paddingTop: 10 },
+  card: { 
+    borderRadius: 20, 
+    width: '100%',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0 }, 
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 5,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.4)',
+    overflow: 'hidden'
+  },
+  cardInner: { padding: 24, flex: 1 },
+  
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cardTitle: { fontSize: 22, fontWeight: '700', color: COLORS.textPrimary },
+  iconBtn: { padding: 4 },
+
+  cardBody: { justifyContent: 'center' },
+  aiLabel: { fontSize: 11, fontWeight: '900', color: COLORS.textSecondary, marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' },
+  aiTask: { fontSize: 26, fontWeight: '400', color: COLORS.textPrimary, marginBottom: 12, lineHeight: 32 },
+  aiNote: { fontSize: 14, color: COLORS.textPrimary, opacity: 0.6, lineHeight: 20, fontStyle: 'italic' },
+  loadingTextSmall: { fontSize: 14, color: COLORS.textSecondary, fontStyle: 'italic' },
+  
+  emptyState: { alignItems: 'center', padding: 40 },
+
+  // Modal & Nav
   modalOverlay: { flex: 1, backgroundColor: COLORS.modalOverlay, justifyContent: 'flex-end' },
-  addModalContent: { backgroundColor: '#EBEBEB', padding: 24, borderTopLeftRadius: 30, borderTopRightRadius: 30, minHeight: height * 0.5 },
-  modalTitle: { fontSize: 22, fontWeight: '600', color: COLORS.textPrimary, marginBottom: 10 },
-  input: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginBottom: 20 },
+  addModalContent: { backgroundColor: '#F2F2F7', padding: 24, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: '700' },
+  input: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginBottom: 15, fontSize: 16 },
   modeRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  modeBtn: { flex: 1, padding: 15, backgroundColor: '#FFF', borderRadius: 12, alignItems: 'center' },
-  modeBtnActive: { borderWidth: 2, borderColor: '#A0A0A0' },
-  createBtn: { backgroundColor: COLORS.primaryBtn, padding: 18, borderRadius: 16, alignItems: 'center', marginTop: 10 },
-  bottomNav: { position: 'absolute', bottom: 0, width: '100%', height: 90, backgroundColor: COLORS.navBar, flexDirection: 'row', justifyContent: 'space-around', paddingTop: 15, borderTopLeftRadius: 30, borderTopRightRadius: 30, elevation: 10 },
-  addButton: { backgroundColor: '#D1D5DB', width: 55, height: 55, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginTop: -25, elevation: 5 },
+  modeBtn: { flex: 1, padding: 12, backgroundColor: '#E5E5EA', borderRadius: 10, alignItems: 'center' },
+  modeBtnActive: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#C7C7CC' },
+  createBtn: { backgroundColor: COLORS.primaryBtn, padding: 18, borderRadius: 14, alignItems: 'center' },
+
+  bottomNav: { position: 'absolute', bottom: 30, left: 20, right: 20, height: 70, backgroundColor: COLORS.navBar, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderRadius: 35, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
+  addButton: { backgroundColor: '#1C1C1E', width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', top: -10 },
   navItem: { padding: 10 },
-  placeholderIcon: { width: 24, height: 24, backgroundColor: '#E5E7EB', borderRadius: 6 },
 });
