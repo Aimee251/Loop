@@ -150,12 +150,12 @@ export abstract class Habit {
       const checkDate = new Date(weekStart);
       checkDate.setDate(checkDate.getDate() + i);
       const dateStr = checkDate.toISOString().split("T")[0];
-      
+
       // Stop counting if we haven't reached that day yet
       if (checkDate > today) {
         break;
       }
-      
+
       if (this.completedDays.includes(dateStr)) {
         weekCompletions++;
       }
@@ -209,7 +209,6 @@ export abstract class Habit {
       return GroupHabit.fromJSON(data);
     }
     return SoloHabit.fromJSON(data);
-  }
-  */
+  }*/
 }
 
