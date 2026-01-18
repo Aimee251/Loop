@@ -39,7 +39,7 @@ export default function MoodScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.greeting}>Good Morning,</Text>
+        <Text style={styles.greeting}>Good Afternoon,</Text>
         <Text style={styles.name}>Aimee</Text>
         
         <View style={styles.spacer} />
@@ -54,8 +54,10 @@ export default function MoodScreen() {
               style={[styles.card, { backgroundColor: m.color }]}
               onPress={() => handleMoodSelect(m.key)}
             >
-              <Ionicons name={m.icon} size={40} color={COLORS.textPrimary} />
-              <Text style={styles.label}>{m.label}</Text>
+              <View style={styles.cardContent}>
+                <Ionicons name={m.icon} size={40} color={COLORS.textPrimary} />
+                <Text style={styles.label}>{m.label}</Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>
@@ -79,4 +81,9 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 3
   },
   label: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary },
+  cardContent: {
+  alignItems: 'center',
+  justifyContent: 'center',
+  transform: [{ translateY: -21 }], // 👈 moves content up
+},
 });
