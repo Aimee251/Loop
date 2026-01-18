@@ -7,8 +7,8 @@
  * See SoloHabit.ts and GroupHabit.ts for the concrete implementations.
  */
 
-import { SoloHabit } from './SoloHabit';
-import { GroupHabit } from './GroupHabit';
+//import { SoloHabit } from './SoloHabit';
+//import { GroupHabit } from './GroupHabit';
 
 export interface HabitData {
   id: string;
@@ -150,12 +150,12 @@ export abstract class Habit {
       const checkDate = new Date(weekStart);
       checkDate.setDate(checkDate.getDate() + i);
       const dateStr = checkDate.toISOString().split("T")[0];
-      
+
       // Stop counting if we haven't reached that day yet
       if (checkDate > today) {
         break;
       }
-      
+
       if (this.completedDays.includes(dateStr)) {
         weekCompletions++;
       }
@@ -203,12 +203,12 @@ export abstract class Habit {
 
   /**
    * Create a Habit instance from plain object
-   */
+   
   static fromJSON(data: HabitData): Habit {
     if (data.phoneNumbers && data.phoneNumbers.length > 0) {
       return GroupHabit.fromJSON(data);
     }
     return SoloHabit.fromJSON(data);
-  }
+  }*/
 }
 
