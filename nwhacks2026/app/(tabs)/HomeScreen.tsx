@@ -1,33 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, Text, View, SafeAreaView, ScrollView, 
-  TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, 
-  Platform, ActivityIndicator, Dimensions, Alert 
+import {
+  StyleSheet, Text, View, SafeAreaView, ScrollView,
+  TouchableOpacity, Modal, TextInput, KeyboardAvoidingView,
+  Platform, ActivityIndicator, Alert
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from "expo-router"; 
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withSpring, 
+import { router, useLocalSearchParams } from "expo-router";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
   withTiming,
   interpolate,
-  Extrapolation 
+  Extrapolation
 } from 'react-native-reanimated';
 
-import { habitManager } from '@/models/HabitManager'; 
+import { habitManager } from '@/models/HabitManager';
 import { getMoodAdjustedTask } from '@/utils/moodAi';
 
 // --- CONSTANTS ---
 const COLORS = {
-  background: '#F2F2F7', 
+  background: '#F2F2F7',
   textPrimary: '#1C1C1E',
   textSecondary: '#8E8E93',
-  card1: '#DCE8FA', 
-  card2: '#DEF5DB', 
+  card1: '#DCE8FA',
+  card2: '#DEF5DB',
   card3: '#FBE4E4',
-  navBar: '#FFFFFF', 
-  modalOverlay: 'rgba(0,0,0,0.5)', 
+  navBar: '#FFFFFF',
+  modalOverlay: 'rgba(0,0,0,0.5)',
   primaryBtn: '#000000',
 };
 
@@ -35,50 +35,44 @@ const COLORS = {
 const MIN_GOAL_DAYS = 7;
 const MAX_GOAL_DAYS = 120;
 
+// NEW: Burnout guard
+const MAX_ACTIVE_HABITS = 3;
+
 // --- ANIMATED CARD COMPONENT ---
-// We extract this to manage individual animations efficiently
-const HabitCard = ({ 
-  habit, 
-  index, 
-  aiInfo, 
-  isExpanded, 
-  onPress, 
-  onDelete 
+const HabitCard = ({
+  habit,
+  index,
+  aiInfo,
+  isExpanded,
+  onPress,
+  onDelete,
+  onOpenCalendar,
 }) => {
-  // 1. Define the animation driver (0 = collapsed, 1 = expanded)
-  // We rely on the parent prop 'isExpanded' to trigger changes
   const animation = useSharedValue(0);
 
   useEffect(() => {
-    // Smooth spring animation for natural movement
     animation.value = withSpring(isExpanded ? 1 : 0, {
-      damping: 100,    // Controls "bounciness" (lower = more bounce)
-      stiffness: 1000, // Controls speed
+      damping: 100,
+      stiffness: 1000,
     });
   }, [isExpanded]);
 
-  // 2. Interpolate styles based on animation value
   const animatedStyle = useAnimatedStyle(() => {
-    // Calculated margin: collapsed = -120 (stack), expanded = 20 (breathing room)
-    const marginTop = index === 0 
-      ? withTiming(isExpanded ? 20 : 0) // First card just slides down a bit
-      : interpolate(animation.value, [0, 1], [-130, 20]); // Others slide out from stack
+    const marginTop = index === 0
+      ? withTiming(isExpanded ? 20 : 0)
+      : interpolate(animation.value, [0, 1], [-130, 20]);
 
-    // Height change
     const height = interpolate(animation.value, [0, 1], [200, 300]);
-    
-    // Scale effect (pop up slightly when active)
     const scale = interpolate(animation.value, [0, 1], [0.95, 1]);
 
     return {
       marginTop,
       height,
       transform: [{ scale }],
-      zIndex: isExpanded ? 100 : index, // Ensure active card is on top
+      zIndex: isExpanded ? 100 : index,
     };
   });
 
-  // Fade in content when expanded
   const contentStyle = useAnimatedStyle(() => {
     return {
       opacity: interpolate(animation.value, [0, 0.5, 1], [0, 0, 1], Extrapolation.CLAMP),
@@ -92,27 +86,47 @@ const HabitCard = ({
 
   return (
     <Animated.View style={[styles.card, { backgroundColor: cardColor }, animatedStyle]}>
-      <TouchableOpacity 
-        activeOpacity={0.9} 
-        onPress={() => onPress(habit.id)} 
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => onPress(habit.id)}
         style={styles.cardInner}
       >
         {/* HEADER (Always Visible) */}
         <View style={styles.cardHeader}>
           <View style={styles.headerLeft}>
-            <MaterialCommunityIcons 
-              name={habit.phoneNumbers && habit.phoneNumbers.length > 0 ? "account-group" : "water-outline"} 
-              size={28} color={COLORS.textPrimary} 
+            <MaterialCommunityIcons
+              name={habit.phoneNumbers && habit.phoneNumbers.length > 0 ? "account-group" : "water-outline"}
+              size={28}
+              color={COLORS.textPrimary}
             />
             <Text style={styles.cardTitle}>{habit.action}</Text>
           </View>
-          
+
           {isExpanded ? (
-            <TouchableOpacity onPress={() => onDelete(habit.id)} style={styles.iconBtn}>
-              <Ionicons name="trash-outline" size={22} color={COLORS.textSecondary} />
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                onPress={() => onOpenCalendar(habit.id)}
+                style={styles.iconBtn}
+                accessibilityLabel="Open habit calendar"
+              >
+                <Ionicons name="calendar-outline" size={22} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => onDelete(habit.id)}
+                style={styles.iconBtn}
+                accessibilityLabel="Delete habit"
+              >
+                <Ionicons name="trash-outline" size={22} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
           ) : (
-            <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} style={{ opacity: 0.5 }}/>
+            <Ionicons
+              name="chevron-down"
+              size={20}
+              color={COLORS.textSecondary}
+              style={{ opacity: 0.5 }}
+            />
           )}
         </View>
 
@@ -128,7 +142,6 @@ const HabitCard = ({
             <Text style={styles.loadingTextSmall}>Syncing with mood...</Text>
           )}
         </Animated.View>
-
       </TouchableOpacity>
     </Animated.View>
   );
@@ -137,13 +150,13 @@ const HabitCard = ({
 
 // --- MAIN SCREEN ---
 export default function MainScreen() {
-  const { mood } = useLocalSearchParams(); 
-  const currentMood = mood || 'calm'; 
+  const { mood } = useLocalSearchParams();
+  const currentMood = mood || 'calm';
 
   const [habits, setHabits] = useState([]);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiData, setAiData] = useState({}); 
+  const [aiData, setAiData] = useState({});
   const [expandedCardId, setExpandedCardId] = useState(null);
 
   // Form State
@@ -170,7 +183,7 @@ export default function MainScreen() {
   const fetchAiForHabits = async (moodTag) => {
     setAiLoading(true);
     const currentHabits = habitManager.getActiveHabits();
-    const newAiData = {};
+    const newAiData: any = {};
     await Promise.all(currentHabits.map(async (h) => {
       try {
         const res = await getMoodAdjustedTask({ moodTag, habitAction: h.action });
@@ -197,7 +210,6 @@ export default function MainScreen() {
 
     try {
       setOptimalDaysLoading(true);
-      // Duration is computed habit-first (not mood-based). Use a fixed tag.
       const res = await getMoodAdjustedTask({ moodTag: 'neutral', habitAction: habitName.trim() });
       setGoalDaysInput(String(res.recommendedDays));
       setOptimalDaysWhy(res.daysWhy);
@@ -211,6 +223,16 @@ export default function MainScreen() {
   };
 
   const handleCreateHabit = () => {
+    // NEW: Burnout guard (max 3 active habits)
+    const activeCount = habitManager.getActiveHabits().length;
+    if (activeCount >= MAX_ACTIVE_HABITS) {
+      Alert.alert(
+        'Habit limit reached',
+        `You can only have ${MAX_ACTIVE_HABITS} active habits at a time! Adding more usually leads to burnout.\n\nFinish or delete one first, then add a new one.`
+      );
+      return;
+    }
+
     if (!habitName.trim()) return Alert.alert("Required", "Enter a name");
 
     const goalDays = parseGoalDays();
@@ -222,11 +244,12 @@ export default function MainScreen() {
     }
 
     if (isGroupMode) {
-       if (!phoneNumber.trim()) return Alert.alert('Required', "Enter your friend's phone number");
-       habitManager.createGroupHabit(habitName.trim(), goalDays, [phoneNumber.trim()]);
+      if (!phoneNumber.trim()) return Alert.alert('Required', "Enter your friend's phone number");
+      habitManager.createGroupHabit(habitName.trim(), goalDays, [phoneNumber.trim()]);
     } else {
-       habitManager.createSoloHabit(habitName.trim(), goalDays);
+      habitManager.createSoloHabit(habitName.trim(), goalDays);
     }
+
     setHabitName('');
     setPhoneNumber('');
     setIsGroupMode(false);
@@ -234,8 +257,9 @@ export default function MainScreen() {
     setOptimalDaysWhy('');
     setOptimalDaysRange(null);
     setAddModalVisible(false);
+
     refreshHabits();
-    if (currentMood) fetchAiForHabits(currentMood); 
+    if (currentMood) fetchAiForHabits(currentMood);
   };
 
   const handleDelete = (id) => {
@@ -257,10 +281,17 @@ export default function MainScreen() {
     setOptimalDaysRange(null);
   };
 
+  const openCalendarForHabit = (habitId: string) => {
+    router.push({
+      pathname: '/CalendarScreen',
+      params: { habitId },
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent} 
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         contentOffset={{ x: 0, y: -20 }}
       >
@@ -268,38 +299,38 @@ export default function MainScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greetingSub}>Loop</Text>
-            <Text style={styles.dateText}>Your Habit Porgress</Text>
+            <Text style={styles.dateText}>Your Habit Progress</Text>
           </View>
-            <TouchableOpacity
-              style={styles.moodBadge}
-              activeOpacity={0.8}
-              onPress={() => router.push("/MoodScreen")}
-            >
-              <Text style={styles.moodText}>
-                {typeof currentMood === 'string'
-                  ? currentMood.charAt(0).toUpperCase() + currentMood.slice(1)
-                  : ''}
-              </Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.moodBadge}
+            activeOpacity={0.8}
+            onPress={() => router.push("/MoodScreen")}
+          >
+            <Text style={styles.moodText}>
+              {typeof currentMood === 'string'
+                ? currentMood.charAt(0).toUpperCase() + currentMood.slice(1)
+                : ''}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* AI Loading */}
         {aiLoading && (
-           <View style={styles.loadingRow}>
-             <ActivityIndicator size="small" color={COLORS.textPrimary} />
-             <Text style={styles.loadingText}>Syncing Mood...</Text>
-           </View>
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" color={COLORS.textPrimary} />
+            <Text style={styles.loadingText}>Syncing Mood...</Text>
+          </View>
         )}
 
-        {/* --- STACKED CARD LIST --- */}
+        {/* Cards */}
         <View style={styles.cardStackContainer}>
           {habits.length === 0 ? (
-             <View style={styles.emptyState}>
-                <Text style={{color: COLORS.textSecondary}}>No cards found.</Text>
-             </View>
+            <View style={styles.emptyState}>
+              <Text style={{ color: COLORS.textSecondary }}>No cards found.</Text>
+            </View>
           ) : (
             habits.map((habit, index) => (
-              <HabitCard 
+              <HabitCard
                 key={habit.id}
                 habit={habit}
                 index={index}
@@ -307,12 +338,13 @@ export default function MainScreen() {
                 isExpanded={expandedCardId === habit.id}
                 onPress={toggleCard}
                 onDelete={handleDelete}
+                onOpenCalendar={openCalendarForHabit}
               />
             ))
           )}
         </View>
-        
-        <View style={{ height: 120 }} /> 
+
+        <View style={{ height: 120 }} />
       </ScrollView>
 
       {/* --- ADD MODAL --- */}
@@ -320,31 +352,30 @@ export default function MainScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
           <View style={styles.addModalContent}>
             <View style={styles.modalHeaderRow}>
-               <Text style={styles.modalTitle}>New Habit</Text>
-               <TouchableOpacity onPress={closeAddModal}>
-                 <Ionicons name="close-circle" size={30} color={COLORS.textSecondary} />
-               </TouchableOpacity>
+              <Text style={styles.modalTitle}>New Habit</Text>
+              <TouchableOpacity onPress={closeAddModal}>
+                <Ionicons name="close-circle" size={30} color={COLORS.textSecondary} />
+              </TouchableOpacity>
             </View>
 
-            <TextInput 
-              style={styles.input} placeholder="Habit Name" 
+            <TextInput
+              style={styles.input}
+              placeholder="Habit Name"
               value={habitName}
               onChangeText={(t) => {
                 setHabitName(t);
-                // If the habit name changes, reset the "optimal" explanation so it doesn't mismatch.
                 setOptimalDaysWhy('');
                 setOptimalDaysRange(null);
               }}
             />
 
-            {/* Duration (required) */}
+            {/* Duration */}
             <View style={styles.durationRow}>
               <TextInput
                 style={[styles.input, styles.durationInput]}
                 placeholder={`Duration (${MIN_GOAL_DAYS}-${MAX_GOAL_DAYS} days)`}
                 value={goalDaysInput}
                 onChangeText={(t) => {
-                  // Allow only digits
                   const cleaned = t.replace(/[^0-9]/g, '');
                   setGoalDaysInput(cleaned);
                 }}
@@ -375,23 +406,26 @@ export default function MainScreen() {
             )}
 
             <View style={styles.modeRow}>
-               <TouchableOpacity onPress={() => setIsGroupMode(false)} style={[styles.modeBtn, !isGroupMode && styles.modeBtnActive]}>
-                 <Text style={{fontWeight: !isGroupMode ? '700' : '400'}}>Solo</Text>
-               </TouchableOpacity>
-               <TouchableOpacity onPress={() => setIsGroupMode(true)} style={[styles.modeBtn, isGroupMode && styles.modeBtnActive]}>
-                 <Text style={{fontWeight: isGroupMode ? '700' : '400'}}>Group</Text>
-               </TouchableOpacity>
+              <TouchableOpacity onPress={() => setIsGroupMode(false)} style={[styles.modeBtn, !isGroupMode && styles.modeBtnActive]}>
+                <Text style={{ fontWeight: !isGroupMode ? '700' : '400' }}>Solo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setIsGroupMode(true)} style={[styles.modeBtn, isGroupMode && styles.modeBtnActive]}>
+                <Text style={{ fontWeight: isGroupMode ? '700' : '400' }}>Group</Text>
+              </TouchableOpacity>
             </View>
 
             {isGroupMode && (
-              <TextInput 
-                style={styles.input} placeholder="Friend's Phone #" 
-                value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad"
+              <TextInput
+                style={styles.input}
+                placeholder="Friend's Phone #"
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                keyboardType="phone-pad"
               />
             )}
 
             <TouchableOpacity style={styles.createBtn} onPress={handleCreateHabit}>
-               <Text style={{color: '#FFF', fontWeight: 'bold'}}>Add Habit</Text>
+              <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Add Habit</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -400,16 +434,19 @@ export default function MainScreen() {
       {/* Bottom Nav */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/')}>
-          <Ionicons name="wallet" size={28} color={COLORS.textPrimary}/>
+          <Ionicons name="wallet" size={28} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.addButton} onPress={() => setAddModalVisible(true)}>
           <Ionicons name="add" size={32} color="#FFF" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-           <Ionicons name="stats-chart" size={24} color="#C5C5C7"/>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => router.push('/CalendarScreen')}
+          accessibilityLabel="Open calendar"
+        >
+          <Ionicons name="stats-chart" size={24} color="#C5C5C7" />
         </TouchableOpacity>
       </View>
-
     </SafeAreaView>
   );
 }
@@ -417,23 +454,22 @@ export default function MainScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scrollContent: { padding: 20, paddingTop: 10 },
-  
+
   header: { marginBottom: 30, marginTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   greetingSub: { fontSize: 34, fontWeight: '800', color: COLORS.textPrimary },
   dateText: { fontSize: 16, color: COLORS.textSecondary, fontWeight: '500', marginTop: -5 },
   moodBadge: { backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 30, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 },
   moodText: { fontWeight: '700', color: COLORS.textPrimary, fontSize: 14 },
-  
+
   loadingRow: { flexDirection: 'row', gap: 10, marginBottom: 20, justifyContent: 'center' },
   loadingText: { color: COLORS.textSecondary, fontSize: 12 },
 
-  // --- STACK STYLES ---
   cardStackContainer: { paddingTop: 10 },
-  card: { 
-    borderRadius: 20, 
+  card: {
+    borderRadius: 20,
     width: '100%',
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 0 }, 
+    shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.15,
     shadowRadius: 20,
     elevation: 5,
@@ -442,9 +478,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   cardInner: { padding: 24, flex: 1 },
-  
+
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cardTitle: { fontSize: 22, fontWeight: '700', color: COLORS.textPrimary },
   iconBtn: { padding: 4 },
 
@@ -453,20 +490,18 @@ const styles = StyleSheet.create({
   aiTask: { fontSize: 26, fontWeight: '400', color: COLORS.textPrimary, marginBottom: 12, lineHeight: 32 },
   aiNote: { fontSize: 14, color: COLORS.textPrimary, opacity: 0.6, lineHeight: 20, fontStyle: 'italic' },
   loadingTextSmall: { fontSize: 14, color: COLORS.textSecondary, fontStyle: 'italic' },
-  
+
   emptyState: { alignItems: 'center', padding: 40 },
 
-  // Modal & Nav
   modalOverlay: { flex: 1, backgroundColor: COLORS.modalOverlay, justifyContent: 'flex-end' },
   addModalContent: { backgroundColor: '#F2F2F7', padding: 24, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
   modalTitle: { fontSize: 20, fontWeight: '700' },
   input: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginBottom: 15, fontSize: 16 },
 
-  // Duration input + generator
   durationRow: { flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 10 },
   durationInput: { flex: 1, marginBottom: 0 },
-  optimalBtn: { 
+  optimalBtn: {
     paddingHorizontal: 14,
     height: 52,
     borderRadius: 12,
