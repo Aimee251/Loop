@@ -1,18 +1,8 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React from 'react';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
-
-// Define the Mood Data Types
-type MoodKey = 'energetic' | 'tired' | 'anxious' | 'calm';
-
-interface MoodOption {
-  key: MoodKey;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-}
+import { router } from "expo-router"; // <--- Use this for navigation
 
 // Shared Colors
 const COLORS = {
@@ -24,7 +14,7 @@ const COLORS = {
   card3: '#FAE6E6',
 };
 
-const MOOD_TAGS: MoodOption[] = [
+const MOOD_TAGS = [
   { key: 'energetic', label: 'Energetic', icon: 'flash', color: COLORS.card1 },
   { key: 'tired', label: 'Tired', icon: 'bed', color: COLORS.card2 },
   { key: 'anxious', label: 'Anxious', icon: 'pulse', color: COLORS.card3 },
@@ -32,50 +22,19 @@ const MOOD_TAGS: MoodOption[] = [
 ];
 
 export default function MoodScreen() {
-  const [loading, setLoading] = React.useState(true);
 
-  // Optional: Check if user already logged mood today to skip this screen
-  useEffect(() => {
-    checkPreviousMood();
-  }, []);
-
-  const checkPreviousMood = async () => {
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const savedDate = await AsyncStorage.getItem("mood_date");
-      const savedMood = await AsyncStorage.getItem("user_mood");
-
-      // If they already checked in today, go straight to HomeScreen
-      if (savedDate === today && savedMood) {
-        router.replace({ pathname: "/HomeScreen", params: { mood: savedMood } });
-      } else {
-        setLoading(false);
-      }
-    } catch (e) {
-      setLoading(false);
-    }
-  };
-
-  const handleMoodSelect = async (selectedMood: MoodKey) => {
+  const handleMoodSelect = async (selectedMood) => {
     try {
       const today = new Date().toISOString().split("T")[0];
       await AsyncStorage.setItem("user_mood", selectedMood);
       await AsyncStorage.setItem("mood_date", today);
 
-      // Navigate to the dashboard (app/HomeScreen.tsx)
-      router.replace({ pathname: "/HomeScreen", params: { mood: selectedMood } }); 
+      // Navigate to the main page
+      router.replace({ pathname: "/main", params: { mood: selectedMood } }); 
     } catch (e) {
       console.error("Failed to save mood", e);
     }
   };
-
-  if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={COLORS.textPrimary} />
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
