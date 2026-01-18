@@ -1,32 +1,32 @@
 /**
  * Represents a habit that a user is tracking.
- * Each habit has an action (what to do), a total goal (number of days to complete),
- * and a weekly goal (how many times per week you want to do the habit).
+ * Two types supported:
+ * 1. SoloHabit - Individual habit tracking
+ * 2. GroupHabit - Habit with multiple phone numbers for group accountability
  * 
- * Interacting with a habit:
- * User can create a habit which has an action and an amount of days goal
- * User can edit the action and amount of days goal
- * User can delete a habit
+ * See SoloHabit.ts and GroupHabit.ts for the concrete implementations.
  */
+
+import { SoloHabit } from './SoloHabit';
+import { GroupHabit } from './GroupHabit';
 
 export interface HabitData {
   id: string;
   action: string;
   goalDays: number;
-  daysPerWeekGoal: number;
   createdAt: string | Date;
   updatedAt: string | Date;
   currentStreak: number;
   completedDays: string[]; // Array of dates (YYYY-MM-DD) when habit was completed
   daysPerWeekDone: number; // Number of days completed in the current week
   isActive: boolean;
+  phoneNumbers?: string[]; // For GroupHabit only
 }
 
-export class Habit {
+export abstract class Habit {
   id: string;
   action: string;
   goalDays: number;
-  daysPerWeekGoal: number;
   createdAt: Date;
   updatedAt: Date;
   currentStreak: number;
@@ -37,8 +37,7 @@ export class Habit {
   constructor(
     action: string,
     goalDays: number,
-    daysPerWeekGoal: number,
-    completedDays: string[],
+    completedDays: string[] = [],
     id?: string,
     createdAt?: Date,
     updatedAt?: Date,
@@ -49,7 +48,6 @@ export class Habit {
     this.id = id || this.generateId();
     this.action = action;
     this.goalDays = goalDays;
-    this.daysPerWeekGoal = daysPerWeekGoal;
     this.createdAt = createdAt || new Date();
     this.updatedAt = updatedAt || new Date();
     this.currentStreak = currentStreak;
@@ -165,12 +163,6 @@ export class Habit {
 
     // If it's the end of the week and we didn't meet the goal, add shortfall to goalDays
     const daysIntoWeek = Math.floor((today.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    
-    // If week is complete (Sunday) and goal not met, increase goalDays
-    if (day === 0 && weekCompletions < this.daysPerWeekGoal) {
-      const shortfall = this.daysPerWeekGoal - weekCompletions;
-      this.goalDays += shortfall;
-    }
 
     this.daysPerWeekDone = weekCompletions;
   }
@@ -179,7 +171,7 @@ export class Habit {
    * Check if goal is reached
    */
   isGoalReached(): boolean {
-    return this.completedDays.length >= this.goalDays && this.daysPerWeekDone >= this.daysPerWeekGoal;
+    return this.completedDays.length >= this.goalDays;
   }
 
   /**
@@ -210,38 +202,13 @@ export class Habit {
   }
 
   /**
-   * Convert to plain object (useful for storage/serialization)
-   */
-  toJSON(): HabitData {
-    return {
-      id: this.id,
-      action: this.action,
-      goalDays: this.goalDays,
-      daysPerWeekGoal: this.daysPerWeekGoal,
-      createdAt: this.createdAt,
-      updatedAt: this.updatedAt,
-      currentStreak: this.currentStreak,
-      completedDays: this.completedDays,
-      daysPerWeekDone: this.daysPerWeekDone,
-      isActive: this.isActive,
-    };
-  }
-
-  /**
    * Create a Habit instance from plain object
    */
   static fromJSON(data: HabitData): Habit {
-    return new Habit(
-      data.action,
-      data.goalDays,
-      data.daysPerWeekGoal,
-      data.completedDays,
-      data.id,
-      typeof data.createdAt === 'string' ? new Date(data.createdAt) : data.createdAt,
-      typeof data.updatedAt === 'string' ? new Date(data.updatedAt) : data.updatedAt,
-      data.currentStreak,
-      data.daysPerWeekDone,
-      data.isActive
-    );
+    if (data.phoneNumbers && data.phoneNumbers.length > 0) {
+      return GroupHabit.fromJSON(data);
+    }
+    return SoloHabit.fromJSON(data);
   }
 }
+
